@@ -186,11 +186,11 @@ function recompute(j){
 function mapsURL(addr){return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&origin='+encodeURIComponent(S.base)+'&destination='+encodeURIComponent(addr)}
 function travelHTML(j){
   if(j.waiting||!j.address.trim())return '';
-  if(j.calc)return '<span class="tv-msg">🚗 Calculando tempo de viagem…</span>';
+  if(j.calc)return '<span class="tv-msg">⏰ Calculando tempo de viagem…</span>';
   const link=`<a href="${esc(mapsURL(j.address.trim()))}" target="_blank" rel="noopener">Conferir no Google Maps ↗</a>`;
-  if(!j.tk&&j.travel==null&&sampler)return `<button class="linkbtn" data-act="calc" style="font-size:14px">🚗 Calcular viagem e horário do shop</button>${link}`;
+  if(!j.tk&&j.travel==null&&sampler)return `<button class="linkbtn" data-act="calc" style="font-size:14px">⏰ Calcular viagem e horário do shop</button>${link}`;
   const err=j.travel==null?`<span class="tv-msg">${sampler?'Não consegui calcular. Digite os minutos:':'Digite os minutos de viagem:'}</span>`:'';
-  return `${err}<label class="tv-in">🚗 <input type="number" min="0" max="300" inputmode="numeric" data-f="travel" value="${j.travel??''}" id="tm-${j.id}" aria-label="Minutos de viagem"> min de viagem</label>${link}`;
+  return `${err}<label class="tv-in">⏰ <input type="number" min="0" max="300" inputmode="numeric" data-f="travel" value="${j.travel??''}" id="tm-${j.id}" aria-label="Minutos de viagem"> min de viagem</label>${link}`;
 }
 function shopNote(j){
   if(j.waiting||!j.address.trim()||j.travel==null)return '';
