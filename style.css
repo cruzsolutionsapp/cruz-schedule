@@ -173,3 +173,20 @@ label.f input:disabled{background:var(--sunk);color:var(--muted)}
 label.btn{display:inline-flex;align-items:center}
 .sync.offline::before{background:var(--warn)}
 #boot[hidden]{display:none}
+
+/* ---- permissões ---- */
+.no-escala #addJob,.no-escala #copyPrev,.no-escala #bringWeek,.no-escala #clearDay,.no-apagar #clearDay,.no-apagar [data-act="del"],
+.no-telefones #notifyPanel,.no-backup #bkPanel,.no-cadastro #addVehicle,.no-cadastro #newWorker,.no-cadastro #addWorker,.no-cadastro #workers [data-wi]{display:none!important}
+.no-escala .job [data-act="pickopen"],.no-escala .job .icon-btn{display:none}
+.members{display:flex;flex-direction:column;gap:10px}
+.mcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.mhead{display:flex;align-items:center;gap:8px}
+.mhead b{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:600}
+.perms{display:flex;flex-wrap:wrap;gap:6px}
+.perm{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:14px;cursor:pointer;user-select:none}
+.perm input{margin:0;accent-color:var(--hivis)}
+.perm:has(input:checked){border-color:var(--hivis);background:var(--hivis-soft)}
+.perm.admin:has(input:checked){background:var(--hivis);color:var(--hivis-ink)}
+.perm:has(input:disabled){opacity:.55;cursor:default}
+.youtag{font-size:12px;color:var(--muted)}
+#newPerms{margin-top:10px}

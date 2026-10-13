@@ -117,37 +117,64 @@ async function route(u) {
     return gate(`<h2>Aguardando liberação</h2><p>Seu e-mail <b>${esc(me)}</b> ainda não foi liberado. Peça pro administrador adicionar você em <b>Cadastro → Acesso</b> e depois toque em "Tentar de novo".</p>
       <div class="gbtns"><button class="btn primary" data-g="recheck">Tentar de novo</button><button class="linkbtn" data-g="out">Sair</button></div>`);
   }
-  const isAdmin = m.data().role === 'admin';
+  const md = m.data(), isAdmin = md.role === 'admin';
+  const perms = {}; PERMS.forEach(([k]) => perms[k] = isAdmin ? true : (md.perms && k in md.perms ? !!md.perms[k] : true));
   if (started) return;
   show('app');
-  $('who').textContent = me + (isAdmin ? ' · administrador' : '');
+  $('who').textContent = me + (isAdmin ? ' · admin' : '');
+  $('tab-access').hidden = !isAdmin;
   $('logout').onclick = () => { try { started && started.flushAll(); } catch (e) {} signOut(auth); };
-  started = window.startApp(dbw, { email: me, isAdmin });
+  started = window.startApp(dbw, { email: me, isAdmin, perms });
   setupMembers(isAdmin, me);
 }
 onAuthStateChanged(auth, route);
 
 /* ----- gerenciar quem tem acesso (só administrador) ----- */
+const PERMS = [['escala', 'Editar escala'], ['apagar', 'Apagar obras'], ['cadastro', 'Editar cadastro'], ['telefones', 'Telefones e avisar equipe'], ['backup', 'Baixar backup']];
+const NEW_DEFAULT = { escala: true, apagar: false, cadastro: false, telefones: true, backup: false };
+const permBoxes = (p, isAdm, prefix, lockAll) =>
+  `<label class="perm admin"><input type="checkbox" data-adm="1" ${isAdm ? 'checked' : ''} ${lockAll ? 'disabled' : ''} id="${prefix}-admin"> Admin (tudo + acesso)</label>` +
+  PERMS.map(([k, t]) => `<label class="perm"><input type="checkbox" data-perm="${k}" ${isAdm || p[k] ? 'checked' : ''} ${isAdm || lockAll ? 'disabled' : ''} id="${prefix}-${k}"> ${t}</label>`).join('');
+const fullPerms = r => { const o = {}; PERMS.forEach(([k]) => o[k] = r.perms && k in r.perms ? !!r.perms[k] : true); return o; };
+
 function setupMembers(isAdmin, me) {
-  $('membersBox').hidden = !isAdmin;
   if (!isAdmin) return;
+  const msgEl = $('memberMsg');
+  const fail = err => { msgEl.textContent = 'Não consegui salvar (' + (err.code || 'erro') + '). Confira se as regras novas foram publicadas no Firebase.'; };
+  let rows = [];
   onSnapshot(collection(fs, 'members'), s => {
-    const rows = s.docs.map(d => d.data()).sort((a, b) => (a.email || '').localeCompare(b.email || ''));
-    $('members').innerHTML = rows.map(r => `<div class="lrow"><span class="wname">${esc(r.email)}</span>
-      <span class="role">${r.role === 'admin' ? 'admin' : 'usuário'}</span>
-      ${r.email === me ? '' : `<button class="x" data-mdel="${esc(r.email)}" aria-label="Tirar acesso de ${esc(r.email)}">×</button>`}</div>`).join('');
+    rows = s.docs.map(d => d.data()).sort((a, b) => (a.email === me ? -1 : b.email === me ? 1 : (a.email || '').localeCompare(b.email || '')));
+    $('members').innerHTML = rows.map((r, i) => `<div class="mcard" data-email="${esc(r.email)}">
+      <div class="mhead"><b>${esc(r.email)}</b>${r.email === me ? '<span class="youtag">você</span>' : `<button class="x" data-mdel="1" aria-label="Tirar acesso de ${esc(r.email)}">×</button>`}</div>
+      <div class="perms">${permBoxes(fullPerms(r), r.role === 'admin', 'm' + i, r.email === me)}</div></div>`).join('') || '<span class="empty">Ninguém liberado ainda.</span>';
   }, () => {});
-  $('members').onclick = async e => { const b = e.target.closest('[data-mdel]'); if (!b) return;
-    if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Tirar?'; return; }
-    await deleteDoc(doc(fs, 'members', b.dataset.mdel)).catch(err => alertMsg(err)); };
+  $('members').addEventListener('change', async e => {
+    const card = e.target.closest('.mcard'); if (!card) return;
+    const email = card.dataset.email;
+    const role = card.querySelector('[data-adm]').checked ? 'admin' : 'member';
+    const perms = {}; card.querySelectorAll('[data-perm]').forEach(c => perms[c.dataset.perm] = c.checked);
+    if (role === 'admin') card.querySelectorAll('[data-perm]').forEach(c => { c.checked = true; c.disabled = true; });
+    try { await setDoc(doc(fs, 'members', email), { email, role, perms, at: serverTimestamp() }); msgEl.textContent = 'Permissões de ' + email + ' salvas.'; }
+    catch (err) { fail(err); }
+  });
+  $('members').addEventListener('click', async e => {
+    const b = e.target.closest('[data-mdel]'); if (!b) return;
+    if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Tirar acesso?'; b.style.fontSize = '13px'; return; }
+    try { await deleteDoc(doc(fs, 'members', b.closest('.mcard').dataset.email)); } catch (err) { fail(err); }
+  });
+  $('newPerms').innerHTML = permBoxes(NEW_DEFAULT, false, 'np', false);
+  $('newPerms').addEventListener('change', e => { if (e.target.dataset.adm) $('newPerms').querySelectorAll('[data-perm]').forEach(c => { if (e.target.checked) c.checked = true; c.disabled = e.target.checked; }); });
   const add = async () => {
     const em = $('newMember').value.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { $('memberMsg').textContent = 'Digite um e-mail válido.'; return; }
-    try { await setDoc(doc(fs, 'members', em), { email: em, role: $('newRole').value, at: serverTimestamp() });
-      $('newMember').value = ''; $('memberMsg').textContent = 'Liberado! Peça pra pessoa abrir o app e tocar em "Primeiro acesso".'; }
-    catch (err) { alertMsg(err); }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { msgEl.textContent = 'Digite um e-mail válido.'; return; }
+    const role = $('newPerms').querySelector('[data-adm]').checked ? 'admin' : 'member';
+    const perms = {}; $('newPerms').querySelectorAll('[data-perm]').forEach(c => perms[c.dataset.perm] = c.checked);
+    try {
+      await setDoc(doc(fs, 'members', em), { email: em, role, perms, at: serverTimestamp() });
+      $('newMember').value = ''; $('newPerms').innerHTML = permBoxes(NEW_DEFAULT, false, 'np', false);
+      msgEl.textContent = 'Liberado! Peça pra pessoa abrir o app e tocar em "Primeiro acesso".';
+    } catch (err) { fail(err); }
   };
-  const alertMsg = err => { $('memberMsg').textContent = 'Não consegui salvar (' + (err.code || 'erro') + ').'; };
   $('addMember').onclick = add;
   $('newMember').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
 }

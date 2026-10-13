@@ -1,5 +1,10 @@
 
 function startApp(db,ctx){
+const P=Object.assign({escala:true,apagar:true,cadastro:true,telefones:true,backup:true},(ctx&&ctx.perms)||{});
+const isAdmin=!!(ctx&&ctx.isAdmin);
+['escala','apagar','cadastro','telefones','backup'].forEach(k=>document.body.classList.toggle('no-'+k,!P[k]));
+let PH={}, phonesLoaded=false;
+const PHONES='config/phones';
 const ATTIRE='Calca👖|Bota 🥾';
 const LKEY='schedule-equipe-local:';
 const pad=n=>String(n).padStart(2,'0');
@@ -36,8 +41,9 @@ function flush(path){
     e=>{inflight--;console.error(e);setStatus('err');toast('Não consegui salvar: '+(e&&e.code||'erro'))});
   if(!navigator.onLine)setStatus('offline');
 }
-const saveDay=()=>queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{}});
-const saveRoster=()=>queue(ROSTER,S);
+const saveDay=()=>(P.escala||P.telefones)&&queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{}});
+const saveRoster=()=>(P.cadastro||P.escala)&&queue(ROSTER,S);
+const savePhones=()=>P.telefones&&queue(PHONES,{phones:PH});
 window.addEventListener('pagehide',flushAll);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)flushAll()});
 
@@ -45,8 +51,7 @@ function normRoster(d){return {workers:Array.isArray(d&&d.workers)?[...d.workers
     o[k]=Array.isArray(v)?v.filter(x=>typeof x==='string'):(typeof v==='string'&&v.trim()?[v]:[])});return o})(),
   base:(d&&typeof d.base==='string'&&d.base.trim())?d.base:'599 Concord St, Holliston, MA 01746',
   buffer:(d&&Number.isFinite(d.buffer))?d.buffer:30,
-  travel:(d&&d.travel&&typeof d.travel==='object')?{...d.travel}:{},
-  phones:(d&&d.phones&&typeof d.phones==='object')?{...d.phones}:{}}}
+  travel:(d&&d.travel&&typeof d.travel==='object')?{...d.travel}:{}}}
 function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.forEach(j=>{j.id=j.id||nid();j.need=+j.need||0;delete j.calc;j.travel=Number.isFinite(j.travel)?j.travel:null;j.autoShop=!!j.autoShop;j.early=Number.isFinite(j.early)?j.early:30;j.tk=j.tk||'';j.crew=Array.isArray(j.crew)?j.crew:[];['company','address','attire','shop','start','note'].forEach(k=>j[k]=j[k]||'');j.allWeek=!!j.allWeek;j.waiting=!!j.waiting});return {date:cur,jobs,sent:(d&&d.sent&&typeof d.sent==='object')?{...d.sent}:{}}}
 
 /* evita re-render enquanto a pessoa digita */
@@ -59,7 +64,19 @@ function remoteRoster(snap){
   if(rosterLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
   const d=snap.exists?snap.data():null;
   if(d&&stable(d)===lastSent[ROSTER]&&rosterLoaded)return;
-  S=normRoster(d);rosterLoaded=true;rerender();
+  S=normRoster(d);rosterLoaded=true;
+  if(d&&d.phones&&typeof d.phones==='object'&&Object.keys(d.phones).length&&isAdmin){
+    // telefones antigos ficavam no cadastro: passa pra um documento separado (só quem pode ver telefones lê)
+    const go=()=>{if(!phonesLoaded)return setTimeout(go,500);PH=Object.assign({},d.phones,PH);savePhones();saveRoster()};go();
+  }
+  rerender();
+}
+function remotePhones(snap){
+  if(pend[PHONES])return;
+  if(phonesLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
+  const d=snap.exists?snap.data():null;
+  if(d&&stable(d)===lastSent[PHONES]&&phonesLoaded)return;
+  PH=(d&&d.phones&&typeof d.phones==='object')?{...d.phones}:{};phonesLoaded=true;rerender();
 }
 function watchDay(){
   if(unsubDay){unsubDay();unsubDay=null}
@@ -190,7 +207,7 @@ function rememberAddr(j){
 
 /* ---------- avisar equipe (WhatsApp, um por um) ---------- */
 const nkey=n=>n.trim().toLowerCase();
-function phoneOf(name){const k=Object.keys(S.phones).find(p=>nkey(p)===nkey(name));return k?S.phones[k]:''}
+function phoneOf(name){const k=Object.keys(PH).find(p=>nkey(p)===nkey(name));return k?PH[k]:''}
 function waDigits(p){let d=(p||'').replace(/\D/g,'');if(d.length===10)d='1'+d;return d.length>=11?d:''}
 function dateBR(){const[y,m,d]=cur.split('-');const wd=['domingo','segunda','terça','quarta','quinta','sexta','sábado'][new Date(+y,m-1,+d).getDay()];return wd+' '+d+'/'+m}
 function personalMsg(c,j){
@@ -207,6 +224,7 @@ function personalMsg(c,j){
 }
 function notifyList(){const out=[];D.jobs.forEach(j=>j.crew.forEach(c=>out.push({c,j})));return out}
 function renderNotify(){
+  if(!P.telefones)return;
   const list=notifyList();const sent=D.sent||{};
   const done=list.filter(x=>sent[nkey(x.c.name)]).length;
   $('ntCount').textContent=list.length?done+' de '+list.length+' avisados':'';
@@ -236,7 +254,7 @@ $('notify').addEventListener('click',e=>{
 });
 $('notify').addEventListener('change',e=>{const n=e.target.dataset.phone;if(n==null)return;const v=e.target.value.trim();
   if(!waDigits(v)){toast('Número inválido. Use o formato (508) 555-1234');return}
-  S.phones[n]=v;saveRoster();renderNotify();renderRoster()});
+  PH[n]=v;savePhones();renderNotify();renderRoster()});
 
 function needCls(j){if(!j.need)return'';return j.crew.length<j.need?'short':j.crew.length>j.need?'over':'full'}
 function needText(j){const n=j.crew.length;if(!j.need)return n+(n===1?' pessoa':' pessoas');
@@ -298,6 +316,7 @@ function renderJobs(){
         <div><button class="btn danger" data-act="del">${confirmDel===j.id?'Toque de novo pra apagar':'Apagar obra'}</button></div>
       </div></article>`;
   }).join(''):'<div class="panel empty">Nenhuma obra neste dia. Toque em "+ Nova obra" ou "Copiar último dia".</div>';
+  if(!P.escala)$('jobs').querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
   $('jobs').insertAdjacentHTML('beforeend',`<datalist id="companyList">${Object.keys(S.companies).map(c=>`<option value="${esc(c)}">`).join('')}</datalist>`);
   refresh(false);
 }
@@ -346,6 +365,8 @@ $('jobs').addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b||b.tagName==='SELECT')return;
   const card=b.closest('.job');const j=findJob(card.dataset.id);if(!j)return;const jobs=D.jobs;const i=jobs.indexOf(j);
   const act=b.dataset.act;let changed=true;
+  if(!P.escala)return;
+  if(act==='del'&&!P.apagar)return;
   if(act!=='del')confirmDel=null;
   if(act==='rm')j.crew.splice(+b.dataset.ci,1);
   else if(act==='pickopen'){openPick=j.id;changed=false}
@@ -400,7 +421,7 @@ $('bringWeek').onclick=async()=>{
   add.forEach(j=>D.jobs.push({...clone(j),id:nid()}));
   saveDay();renderJobs();toast(add.length+(add.length>1?' obras trazidas':' obra trazida'));
 };
-$('clearDay').onclick=()=>{if(confirmClear){D.jobs=[];D.sent={};confirmClear=false;$('clearDay').textContent='Limpar dia';saveDay();renderJobs()}else{confirmClear=true;$('clearDay').textContent='Toque de novo pra limpar'}};
+$('clearDay').onclick=()=>{if(!P.apagar)return;if(confirmClear){D.jobs=[];D.sent={};confirmClear=false;$('clearDay').textContent='Limpar dia';saveDay();renderJobs()}else{confirmClear=true;$('clearDay').textContent='Toque de novo pra limpar'}};
 
 /* ---------- data ---------- */
 function setDate(d){flushAll();cur=d;$('date').value=d;openPick=null;confirmDel=null;confirmClear=false;$('clearDay').textContent='Limpar dia';watchDay()}
@@ -417,8 +438,8 @@ $('copyMsg').onclick=()=>{
 };
 
 /* ---------- abas ---------- */
-function tab(which){const d=which==='day';$('tab-day').setAttribute('aria-selected',d);$('tab-roster').setAttribute('aria-selected',!d);$('view-day').hidden=!d;$('view-roster').hidden=d}
-$('tab-day').onclick=()=>{tab('day');renderJobs()};$('tab-roster').onclick=()=>{tab('roster');renderRoster()};
+function tab(which){['day','roster','access'].forEach(t=>{const b=$('tab-'+t),v=$('view-'+t);if(b)b.setAttribute('aria-selected',t===which);if(v)v.hidden=t!==which})}
+$('tab-day').onclick=()=>{tab('day');renderJobs()};$('tab-roster').onclick=()=>{tab('roster');renderRoster()};if($('tab-access'))$('tab-access').onclick=()=>tab('access');
 
 /* ---------- cadastro ---------- */
 $('baseAddr').addEventListener('change',e=>{const v=e.target.value.trim();if(v&&v!==S.base){S.base=v;S.travel={};saveRoster();toast('Endereço da empresa salvo. Tempos serão recalculados nas próximas obras')}});
@@ -426,7 +447,7 @@ function renderRoster(){
   if(document.activeElement!==$('baseAddr'))$('baseAddr').value=S.base;
   $('wCount').textContent=S.workers.length+' fixos';
   $('workers').innerHTML=S.workers.map((w,i)=>`<div class="lrow"><input class="wname" data-wn="${i}" value="${esc(w)}" aria-label="Nome" id="wn-${i}">
-    <input class="wphone${phoneOf(w)&&!waDigits(phoneOf(w))?' bad':''}" data-wp="${esc(w)}" value="${esc(phoneOf(w))}" placeholder="Telefone" inputmode="tel" aria-label="Telefone de ${esc(w)}" id="wp-${i}">
+    ${P.telefones?'':'<!--'}<input class="wphone${phoneOf(w)&&!waDigits(phoneOf(w))?' bad':''}" data-wp="${esc(w)}" value="${esc(phoneOf(w))}" placeholder="Telefone" inputmode="tel" aria-label="Telefone de ${esc(w)}" id="wp-${i}">${P.telefones?'':'-->'}
     <button class="x" data-wi="${i}" aria-label="Remover ${esc(w)}">×</button></div>`).join('')||'<span class="empty">Nenhum trabalhador cadastrado ainda.</span>';
   $('vehicles').innerHTML=S.vehicles.map((v,i)=>`<div class="lrow">
     <select data-vi="${i}" data-k="t" aria-label="Tipo" id="vt-${i}"><option${v.t==='🛻'?' selected':''}>🛻</option><option${v.t==='🚐'?' selected':''}>🚐</option><option${v.t==='🚚'?' selected':''}>🚚</option></select>
@@ -439,24 +460,25 @@ function renderRoster(){
     ${S.companies[c].map((a,ai)=>`<div class="lrow"><input class="grow" data-co="${esc(c)}" data-ai="${ai}" value="${esc(a)}" placeholder="Endereço" aria-label="Endereço de ${esc(c)}" id="cad-${i}-${ai}">
       <button class="x" data-adel="${esc(c)}" data-ai="${ai}" aria-label="Remover endereço">×</button></div>`).join('')}
   </div>`).join('')||'<span class="empty">As companhias aparecem aqui conforme você cria obras.</span>';
+  if(!P.cadastro){document.querySelectorAll('#view-roster .wname,#workers [data-wi],#vehicles input,#vehicles select,#vehicles button,#companies input,#companies button,#baseAddr,#newWorker,#addWorker,#addVehicle').forEach(el=>el.disabled=true)}
 }
 $('workers').addEventListener('change',e=>{const i=e.target.dataset.wn;if(i==null)return;
   const old=S.workers[+i];const nv=e.target.value.trim().replace(/\s+/g,' ');
   if(!nv||nv===old){e.target.value=old;return}
   if(S.workers.some((w,k)=>k!==+i&&nkey(w)===nkey(nv))){toast('Já existe alguém com esse nome');e.target.value=old;return}
   S.workers[+i]=nv;
-  const pk=Object.keys(S.phones).find(p=>nkey(p)===nkey(old));if(pk){S.phones[nv]=S.phones[pk];delete S.phones[pk]}
+  const pk=Object.keys(PH).find(p=>nkey(p)===nkey(old));if(pk){PH[nv]=PH[pk];delete PH[pk];savePhones()}
   let touched=false;D.jobs.forEach(j=>j.crew.forEach(c=>{if(nkey(c.name)===nkey(old)){c.name=nv;touched=true}}));
   if(D.sent&&D.sent[nkey(old)]){D.sent[nkey(nv)]=D.sent[nkey(old)];delete D.sent[nkey(old)];touched=true}
   saveRoster();if(touched){saveDay();renderJobs()}else refresh(false);
   toast('Nome atualizado'+(touched?' (também na escala deste dia)':''));
 });
 $('workers').addEventListener('change',e=>{const n=e.target.dataset.wp;if(n==null)return;const v=e.target.value.trim();
-  const k=Object.keys(S.phones).find(p=>nkey(p)===nkey(n))||n;
-  if(v)S.phones[k]=v;else delete S.phones[k];
+  const k=Object.keys(PH).find(p=>nkey(p)===nkey(n))||n;
+  if(v)PH[k]=v;else delete PH[k];
   e.target.classList.toggle('bad',!!v&&!waDigits(v));
   if(v&&!waDigits(v))toast('Número parece incompleto. Use o formato (508) 555-1234');
-  saveRoster();renderNotify()});
+  savePhones();renderNotify()});
 $('workers').onclick=e=>{const b=e.target.closest('[data-wi]');if(b){S.workers.splice(+b.dataset.wi,1);saveRoster();renderRoster();refresh(false)}};
 function addWorker(){const n=$('newWorker').value.trim();if(n&&!S.workers.some(w=>w.toLowerCase()===n.toLowerCase())){S.workers.push(n);S.workers.sort((a,b)=>a.localeCompare(b,'pt'));saveRoster();renderRoster();refresh(false)}$('newWorker').value='';$('newWorker').focus()}
 $('addWorker').onclick=addWorker;$('newWorker').onkeydown=e=>{if(e.key==='Enter')addWorker()};
@@ -525,7 +547,7 @@ $('bkRoster').onclick=async e=>{
 };
 showLastBackup();
 $('bkFull').onclick=async e=>{const btn=e.currentTarget;flushAll();let days;try{days=await allDays()}catch(err){toast('Não consegui ler as escalas');return}
-  await offer('cruz-schedule-backup-'+iso(new Date())+'.json',JSON.stringify({app:'cruz-schedule',version:1,exportedAt:new Date().toISOString(),roster:S,days},null,1),btn)};
+  await offer('cruz-schedule-backup-'+iso(new Date())+'.json',JSON.stringify({app:'cruz-schedule',version:1,exportedAt:new Date().toISOString(),roster:Object.assign({},S,P.telefones?{phones:PH}:{}),days},null,1),btn)};
 let pendingImport=null;
 $('importFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
   try{const o=JSON.parse(await f.text());if(!o||o.app!=='cruz-schedule'||!o.roster||!Array.isArray(o.days))throw 0;
@@ -538,6 +560,7 @@ $('importInfo').addEventListener('click',async e=>{
   if(e.target.id!=='importGo'||!pendingImport)return;
   e.target.disabled=true;e.target.textContent='Importando…';
   try{S=normRoster(pendingImport.roster);lastSent[ROSTER]=stable(S);await db.doc(ROSTER).set(clone(S));
+    if(P.telefones&&pendingImport.roster.phones){PH={...pendingImport.roster.phones};lastSent[PHONES]=stable({phones:PH});await db.doc(PHONES).set({phones:PH})}
     for(const d of pendingImport.days){if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d.date))await db.doc(dayPath(d.date)).set({date:d.date,jobs:d.jobs||[],sent:d.sent||{}})}
     toast('Importação concluída');pendingImport=null;$('importInfo').hidden=true;renderRoster();watchDay();
   }catch(err){console.error(err);toast('Falhou a importação: '+(err&&err.code||'erro'))}
@@ -548,6 +571,7 @@ $('date').value=cur;
 S=normRoster(null);
 setStatus('loading');renderJobs();renderRoster();
 db.doc(ROSTER).onSnapshot(remoteRoster,e=>{console.error(e);setStatus('err')});
+if(P.telefones)db.doc(PHONES).onSnapshot(remotePhones,e=>{console.error(e)});else phonesLoaded=true;
 setStatus('ok');
 watchDay();
 return {flushAll};

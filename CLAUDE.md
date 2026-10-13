@@ -12,9 +12,10 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - `firestore.rules` — regras de segurança. Não são publicadas automaticamente: o usuário cola no Console do Firebase → Firestore → Regras.
 
 ## Dados (Firestore)
-- `config/roster`: `{workers[], vehicles[{n,t}], companies{nome:[endereços]}, base, travel{endereçoNormalizado:min}, phones{nome:tel}}`
+- `config/roster`: `{workers[], vehicles[{n,t}], companies{nome:[endereços]}, base, travel{endereçoNormalizado:min}}`
+- `config/phones`: `{phones{nome:tel}}` (separado pra só quem tem a permissão `telefones` ler)
 - `days/YYYY-MM-DD`: `{date, jobs[{id,company,address,waiting,attire,shop,start,early,travel,autoShop,tk,need,note,allWeek,crew[{name,v}]}], sent{nome:iso}}`
-- `members/<email>`: `{email, role:'admin'|'member'}` · `meta/owner`: primeiro administrador.
+- `members/<email>`: `{email, role:'admin'|'member', perms{escala,apagar,cadastro,telefones,backup}}` (perms ausente = tudo liberado; admin = tudo + aba Acesso) · `meta/owner`: primeiro administrador.
 
 ## Formato da mensagem do WhatsApp (não mudar sem pedir)
 ```

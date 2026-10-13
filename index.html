@@ -55,6 +55,7 @@
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" id="tab-day" aria-selected="true">Escala do dia</button>
     <button class="tab" role="tab" id="tab-roster" aria-selected="false">Cadastro</button>
+    <button class="tab" role="tab" id="tab-access" aria-selected="false" hidden>Acesso</button>
   </div>
 
   <section id="view-day">
@@ -75,7 +76,7 @@
           <div class="chat"><div class="bubble" id="preview"></div></div>
           <p class="hint">Use o botão laranja embaixo pra copiar e colar no grupo.</p>
         </div>
-        <div class="panel">
+        <div class="panel" id="notifyPanel">
           <h2>Avisar equipe <small id="ntCount"></small></h2>
           <div id="notify"></div>
         </div>
@@ -84,6 +85,23 @@
           <div class="chips" id="free"></div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="view-access" hidden>
+    <div class="panel">
+      <h2>Quem pode usar o app</h2>
+      <p class="hint" style="margin:0 0 12px">Marque o que cada pessoa pode fazer. Sem nada marcado, a pessoa só <b>vê</b> a escala e copia a mensagem. As mudanças valem na hora (a pessoa só precisa reabrir o app).</p>
+      <div class="members" id="members"></div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h2>Liberar alguém novo</h2>
+      <div class="extra">
+        <input id="newMember" type="email" placeholder="E-mail da pessoa" autocomplete="off">
+        <button class="btn primary" id="addMember">Liberar</button>
+      </div>
+      <div class="perms" id="newPerms"></div>
+      <p class="hint" id="memberMsg">Depois de liberar, a pessoa abre o app, toca em "Primeiro acesso" e cria a própria senha.</p>
     </div>
   </section>
 
@@ -102,16 +120,6 @@
         <div class="panel">
           <h2>Acesso</h2>
           <div class="lrow"><span class="wname" id="who"></span><button class="btn" id="logout">Sair</button></div>
-          <div id="membersBox" hidden>
-            <p class="hint" style="margin-top:10px">Quem pode entrar no app:</p>
-            <div class="list" id="members"></div>
-            <div class="extra" style="margin-top:8px">
-              <input id="newMember" type="email" placeholder="E-mail da pessoa" autocomplete="off">
-              <select id="newRole" aria-label="Tipo de acesso"><option value="member">Usuário</option><option value="admin">Admin</option></select>
-              <button class="btn" id="addMember">Liberar</button>
-            </div>
-            <p class="hint" id="memberMsg">Depois de liberar, a pessoa abre o app, toca em "Primeiro acesso" e cria a própria senha.</p>
-          </div>
         </div>
         <div class="panel">
           <h2>Saída do shop</h2>
@@ -125,7 +133,7 @@
           <div class="list" id="vehicles"></div>
           <button class="btn" id="addVehicle" style="margin-top:8px">+ Veículo</button>
         </div>
-        <div class="panel">
+        <div class="panel" id="bkPanel">
           <h2>Backup <small id="lastBackup"></small></h2>
           <div class="toolbar" style="margin:0">
             <button class="btn primary" id="bkDays">Baixar escalas</button>
