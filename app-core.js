@@ -311,7 +311,7 @@ function renderJobs(){
   const jobs=D.jobs;
   $('jobs').innerHTML=jobs.length?jobs.map((j,i)=>{
     const crew=j.crew.map((c,ci)=>`<div class="member${dupNames.includes(c.name.trim().toLowerCase())?' dup':''}">
-        <span class="nm">${attBadge(j,c)}${esc(c.name)}${isDriverName(c.name)?' <span class="drvmini" title="Motorista">🚗</span>':''}</span>
+        <span class="nm">${attBadge(j,c)}${esc(c.name)}${isDriverName(c.name)?' <span class="drvmini" title="Motorista">🔑</span>':''}</span>
         ${P.escala?attMini(j,c):''}
         <select data-act="veh" data-ci="${ci}" aria-label="Veículo de ${esc(c.name)}" id="vs-${j.id}-${ci}">${vehOptions(c.v)}</select>
         <span class="mord"><button class="mv" data-act="mup" data-ci="${ci}" aria-label="Subir ${esc(c.name)}"${ci===0?' disabled':''}>↑</button><button class="mv" data-act="mdown" data-ci="${ci}" aria-label="Descer ${esc(c.name)}"${ci===j.crew.length-1?' disabled':''}>↓</button></span>
@@ -534,7 +534,7 @@ function renderRoster(){
   if(document.activeElement!==$('baseAddr'))$('baseAddr').value=S.base;
   $('wCount').textContent=S.workers.length+' fixos';
   $('workers').innerHTML=S.workers.map((w,i)=>`<div class="lrow"><input class="wname" data-wn="${i}" value="${esc(w)}" aria-label="Nome" id="wn-${i}">
-    <button class="drvtag${isDriverName(w)?' on':''}" data-drv="${i}" aria-pressed="${isDriverName(w)}" title="Motorista / responsável pela obra">🚗<span> Motorista</span></button>
+    <button class="drvtag${isDriverName(w)?' on':''}" data-drv="${i}" aria-pressed="${isDriverName(w)}" title="Motorista / responsável pela obra">🔑<span> Motorista</span></button>
     ${P.telefones?'':'<!--'}<input class="wphone${phoneOf(w)&&!waDigits(phoneOf(w))?' bad':''}" data-wp="${esc(w)}" value="${esc(phoneOf(w))}" placeholder="Telefone" inputmode="tel" aria-label="Telefone de ${esc(w)}" id="wp-${i}">${P.telefones?'':'-->'}
     <button class="x" data-wi="${i}" aria-label="Remover ${esc(w)}">×</button></div>`).join('')||'<span class="empty">Nenhum trabalhador cadastrado ainda.</span>';
   $('vehicles').innerHTML=S.vehicles.map((v,i)=>`<div class="lrow">
