@@ -284,3 +284,13 @@ body.viewer{padding-bottom:24px}
 .mord{display:inline-flex;gap:2px;flex:none}
 .mv{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:6px;width:28px;height:28px;font-size:14px;line-height:1;cursor:pointer;padding:0}
 .mv:disabled{opacity:.3;cursor:default}
+
+/* ---- cabeçalho fixo ---- */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:8;background:var(--bg);margin-inline:-16px;padding-inline:16px;padding-bottom:2px;box-shadow:0 6px 10px -10px rgba(0,0,0,.35)}
+.topbar header{padding-block:10px 6px}
+.topbar .tabs{margin-bottom:0}
+#view-day,#view-roster,#view-photos,#view-access{padding-top:14px}
+.job{scroll-margin-top:150px}
+.addend{align-self:stretch;justify-content:center;padding:14px;border-style:dashed;font-weight:600;color:var(--hivis)}
+.no-escala #addJob2,.viewer .topbar .tabs{display:none!important}
+@media (max-width:520px){.topbar header h1{font-size:24px}.topbar .logo{width:72px}.topbar .sync{font-size:12px}}

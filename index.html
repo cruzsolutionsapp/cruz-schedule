@@ -42,6 +42,7 @@
 <div id="app" hidden>
 
 <div class="wrap">
+  <div class="topbar" id="topbar">
   <header>
     <div class="brand"><div class="logo" role="img" aria-label="Cruz Solutions Services Corporation"></div><h1>Schedule<span>.</span></h1></div>
     <span class="sync" id="sync">Conectando…</span>
@@ -58,6 +59,7 @@
     <button class="tab" role="tab" id="tab-roster" aria-selected="false">Cadastro</button>
     <button class="tab" role="tab" id="tab-photos" aria-selected="false" hidden>Fotos</button>
     <button class="tab" role="tab" id="tab-access" aria-selected="false" hidden>Acesso</button>
+  </div>
   </div>
 
   <div class="alert warn reqbanner" id="reqBanner" hidden></div>
@@ -184,6 +186,7 @@
 
 <div class="bar"><div class="in">
   <div class="stats" id="stats"></div>
+  <button class="btn" id="addJob2" aria-label="Nova obra">+ Obra</button>
   <button class="btn primary" id="copyMsg">Copiar mensagem</button>
 </div></div>
 <div class="modal" id="gallery" hidden>

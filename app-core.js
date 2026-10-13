@@ -335,7 +335,7 @@ function renderJobs(){
         ${P.fotos?`<button class="btn phcount" data-act="photos">📷 Fotos da obra <b id="pc-${j.id}">${photoCount(j)}</b></button>`:''}
         <div><button class="btn danger" data-act="del">${confirmDel===j.id?'Toque de novo pra apagar':'Apagar obra'}</button></div>
       </div></article>`;
-  }).join(''):'<div class="panel empty">Nenhuma obra neste dia. Toque em "+ Nova obra" ou "Copiar último dia".</div>';
+  }).join('')+(P.escala?'<button class="btn addend" id="addJobEnd">+ Nova obra</button>':''):'<div class="panel empty">Nenhuma obra neste dia. Toque em "+ Nova obra" ou "Copiar último dia".</div>';
   if(!P.escala)$('jobs').querySelectorAll('input,select,button:not([data-act="photos"])').forEach(el=>el.disabled=true);
   $('jobs').insertAdjacentHTML('beforeend',`<datalist id="companyList">${Object.keys(S.companies).map(c=>`<option value="${esc(c)}">`).join('')}</datalist>`);
   refresh(false);
@@ -411,7 +411,9 @@ $('jobs').addEventListener('click',e=>{
 });
 
 /* ---------- barra de ferramentas ---------- */
-$('addJob').onclick=()=>{if(!dayLoaded)return;const j={id:nid(),company:'',address:'',waiting:false,attire:ATTIRE,shop:'',start:'07:00',crew:[],need:0,travel:null,autoShop:true,tk:'',early:30};D.jobs.push(j);openPick=j.id;saveDay();renderJobs();const el=$('co-'+j.id);if(el){el.focus();el.scrollIntoView({block:'center'})}};
+$('addJob').onclick=()=>{if(!dayLoaded)return;const j={id:nid(),company:'',address:'',waiting:false,attire:ATTIRE,shop:'',start:'07:00',crew:[],need:0,travel:null,autoShop:true,tk:'',early:30};D.jobs.push(j);openPick=j.id;saveDay();renderJobs();const card=document.querySelector('.job[data-id="'+j.id+'"]');if(card)card.scrollIntoView({block:'start',behavior:'smooth'});const el=$('co-'+j.id);if(el)el.focus({preventScroll:true})};
+$('addJob2').onclick=()=>$('addJob').click();
+document.addEventListener('click',e=>{if(e.target.id==='addJobEnd')$('addJob').click()});
 $('copyPrev').onclick=async()=>{
   if(!dayLoaded)return;
   let prev=null,jobs=null;
