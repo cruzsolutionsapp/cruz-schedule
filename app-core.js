@@ -44,8 +44,11 @@ function flush(path){
   if(!navigator.onLine)setStatus('offline');
 }
 // drivers: {jobId:[nomes com veículo]} — o banco usa pra conferir que só o motorista daquela obra marca presença/fotos
-const driversMap=()=>{const m={};D.jobs.forEach(j=>{const n=j.crew.filter(c=>c.v).map(c=>c.name);if(n.length)m[j.id]=n});return m};
-const saveDay=()=>(P.escala||P.telefones)&&queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{},drivers:driversMap()});
+// Responsável pela obra = quem está marcado como Motorista no Cadastro, ou quem está com veículo da empresa
+const isDriverName=n=>!!(S&&S.drivers||[]).find(x=>nkey(x)===nkey(n));
+const jobDrivers=j=>j.crew.filter(c=>c.v||isDriverName(c.name)).sort((a,b)=>(isDriverName(b.name)?1:0)-(isDriverName(a.name)?1:0)).map(c=>c.name);
+const driversMap=()=>{const m={};D.jobs.forEach(j=>{const n=jobDrivers(j);if(n.length)m[j.id]=n});return m};
+const saveDay=()=>(P.escala||P.telefones)&&(lastDrivers=driversMap(),queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{},drivers:lastDrivers}));
 const saveRoster=()=>(P.cadastro||P.escala)&&queue(ROSTER,S);
 const savePhones=()=>P.telefones&&queue(PHONES,{phones:PH});
 window.addEventListener('pagehide',flushAll);
@@ -55,7 +58,8 @@ function normRoster(d){return {workers:Array.isArray(d&&d.workers)?[...d.workers
     o[k]=Array.isArray(v)?v.filter(x=>typeof x==='string'):(typeof v==='string'&&v.trim()?[v]:[])});return o})(),
   base:(d&&typeof d.base==='string'&&d.base.trim())?d.base:'599 Concord St, Holliston, MA 01746',
   buffer:(d&&Number.isFinite(d.buffer))?d.buffer:30,
-  travel:(d&&d.travel&&typeof d.travel==='object')?{...d.travel}:{}}}
+  travel:(d&&d.travel&&typeof d.travel==='object')?{...d.travel}:{},
+  drivers:Array.isArray(d&&d.drivers)?d.drivers.filter(x=>typeof x==='string'):[]}}
 function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.forEach(j=>{j.id=j.id||nid();j.need=+j.need||0;delete j.calc;j.travel=Number.isFinite(j.travel)?j.travel:null;j.autoShop=!!j.autoShop;j.early=Number.isFinite(j.early)?j.early:30;j.tk=j.tk||'';j.crew=Array.isArray(j.crew)?j.crew:[];['company','address','attire','shop','start','note'].forEach(k=>j[k]=j[k]||'');j.allWeek=!!j.allWeek;j.waiting=!!j.waiting});return {date:cur,jobs,sent:(d&&d.sent&&typeof d.sent==='object')?{...d.sent}:{}}}
 
 /* evita re-render enquanto a pessoa digita */
@@ -74,7 +78,9 @@ function remoteRoster(snap){
     const go=()=>{if(!phonesLoaded)return setTimeout(go,500);PH=Object.assign({},d.phones,PH);savePhones();saveRoster()};go();
   }
   rerender();
+  if(P.escala&&dayLoaded&&D.jobs.length&&stable(lastDrivers||{})!==stable(driversMap()))saveDay();
 }
+let lastDrivers=null;
 function remotePhones(snap){
   if(pend[PHONES])return;
   if(phonesLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
@@ -96,6 +102,7 @@ function watchDay(){
     const d=snap.exists?snap.data():null;
     if(dayLoaded&&d&&stable(d)===lastSent[path])return;
     D=normDay(d);dayLoaded=true;rerender();
+    lastDrivers=d&&d.drivers||{};
     if(P.escala&&d&&D.jobs.length&&stable(d.drivers||{})!==stable(driversMap()))saveDay();   // dias salvos antes de existir a lista de motoristas
   },e=>{console.error(e);setStatus('err')});
 }
@@ -277,7 +284,7 @@ function renderJobs(){
   const jobs=D.jobs;
   $('jobs').innerHTML=jobs.length?jobs.map((j,i)=>{
     const crew=j.crew.map((c,ci)=>`<div class="member${dupNames.includes(c.name.trim().toLowerCase())?' dup':''}">
-        <span class="nm">${attBadge(j,c)}${esc(c.name)}</span>
+        <span class="nm">${attBadge(j,c)}${esc(c.name)}${isDriverName(c.name)?' <span class="drvmini" title="Motorista">🚗</span>':''}</span>
         <select data-act="veh" data-ci="${ci}" aria-label="Veículo de ${esc(c.name)}" id="vs-${j.id}-${ci}">${vehOptions(c.v)}</select>
         <button class="x" data-act="rm" data-ci="${ci}" aria-label="Tirar ${esc(c.name)}">×</button></div>`).join('')||'<div class="empty">Ninguém escalado ainda.</div>';
     let picker='';
@@ -460,6 +467,7 @@ function renderRoster(){
   if(document.activeElement!==$('baseAddr'))$('baseAddr').value=S.base;
   $('wCount').textContent=S.workers.length+' fixos';
   $('workers').innerHTML=S.workers.map((w,i)=>`<div class="lrow"><input class="wname" data-wn="${i}" value="${esc(w)}" aria-label="Nome" id="wn-${i}">
+    <button class="drvtag${isDriverName(w)?' on':''}" data-drv="${i}" aria-pressed="${isDriverName(w)}" title="Motorista / responsável pela obra">🚗<span> Motorista</span></button>
     ${P.telefones?'':'<!--'}<input class="wphone${phoneOf(w)&&!waDigits(phoneOf(w))?' bad':''}" data-wp="${esc(w)}" value="${esc(phoneOf(w))}" placeholder="Telefone" inputmode="tel" aria-label="Telefone de ${esc(w)}" id="wp-${i}">${P.telefones?'':'-->'}
     <button class="x" data-wi="${i}" aria-label="Remover ${esc(w)}">×</button></div>`).join('')||'<span class="empty">Nenhum trabalhador cadastrado ainda.</span>';
   $('vehicles').innerHTML=S.vehicles.map((v,i)=>`<div class="lrow">
@@ -473,13 +481,14 @@ function renderRoster(){
     ${S.companies[c].map((a,ai)=>`<div class="lrow"><input class="grow" data-co="${esc(c)}" data-ai="${ai}" value="${esc(a)}" placeholder="Endereço" aria-label="Endereço de ${esc(c)}" id="cad-${i}-${ai}">
       <button class="x" data-adel="${esc(c)}" data-ai="${ai}" aria-label="Remover endereço">×</button></div>`).join('')}
   </div>`).join('')||'<span class="empty">As companhias aparecem aqui conforme você cria obras.</span>';
-  if(!P.cadastro){document.querySelectorAll('#view-roster .wname,#workers [data-wi],#vehicles input,#vehicles select,#vehicles button,#companies input,#companies button,#baseAddr,#newWorker,#addWorker,#addVehicle').forEach(el=>el.disabled=true)}
+  if(!P.cadastro){document.querySelectorAll('#view-roster .wname,#workers [data-wi],#vehicles input,#vehicles select,#vehicles button,#companies input,#companies button,#workers [data-drv],#baseAddr,#newWorker,#addWorker,#addVehicle').forEach(el=>el.disabled=true)}
 }
 $('workers').addEventListener('change',e=>{const i=e.target.dataset.wn;if(i==null)return;
   const old=S.workers[+i];const nv=e.target.value.trim().replace(/\s+/g,' ');
   if(!nv||nv===old){e.target.value=old;return}
   if(S.workers.some((w,k)=>k!==+i&&nkey(w)===nkey(nv))){toast('Já existe alguém com esse nome');e.target.value=old;return}
   S.workers[+i]=nv;
+  S.drivers=S.drivers.map(x=>nkey(x)===nkey(old)?nv:x);
   const pk=Object.keys(PH).find(p=>nkey(p)===nkey(old));if(pk){PH[nv]=PH[pk];delete PH[pk];savePhones()}
   let touched=false;D.jobs.forEach(j=>j.crew.forEach(c=>{if(nkey(c.name)===nkey(old)){c.name=nv;touched=true}}));
   if(D.sent&&D.sent[nkey(old)]){D.sent[nkey(nv)]=D.sent[nkey(old)];delete D.sent[nkey(old)];touched=true}
@@ -492,7 +501,12 @@ $('workers').addEventListener('change',e=>{const n=e.target.dataset.wp;if(n==nul
   e.target.classList.toggle('bad',!!v&&!waDigits(v));
   if(v&&!waDigits(v))toast('Número parece incompleto. Use o formato (508) 555-1234');
   savePhones();renderNotify()});
-$('workers').onclick=e=>{const b=e.target.closest('[data-wi]');if(b){S.workers.splice(+b.dataset.wi,1);saveRoster();renderRoster();refresh(false)}};
+$('workers').onclick=e=>{
+  const t=e.target.closest('[data-drv]');
+  if(t){if(!P.cadastro)return;const w=S.workers[+t.dataset.drv];const on=isDriverName(w);
+    S.drivers=on?S.drivers.filter(x=>nkey(x)!==nkey(w)):[...S.drivers,w];saveRoster();renderRoster();
+    if(P.escala&&D.jobs.length)saveDay();renderJobs();toast(on?w+' não é mais motorista':w+' marcado como motorista');return}
+  const b=e.target.closest('[data-wi]');if(b){const w=S.workers[+b.dataset.wi];S.workers.splice(+b.dataset.wi,1);S.drivers=S.drivers.filter(x=>nkey(x)!==nkey(w));saveRoster();renderRoster();refresh(false)}};
 function addWorker(){const n=$('newWorker').value.trim();if(n&&!S.workers.some(w=>w.toLowerCase()===n.toLowerCase())){S.workers.push(n);S.workers.sort((a,b)=>a.localeCompare(b,'pt'));saveRoster();renderRoster();refresh(false)}$('newWorker').value='';$('newWorker').focus()}
 $('bulkAdd').onclick=()=>{
   if(!P.cadastro)return;
@@ -632,7 +646,7 @@ function setAtt(j,name,status){
   const k=Object.keys(people).find(n=>nkey(n)===nkey(name))||name;
   if(people[k]===status)delete people[k];else people[k]=status;
   const now=new Date();
-  const driver=P.escala?(prev.driver||(j.crew.find(c=>c.v)||{}).name||ME||''):ME;
+  const driver=P.escala?(prev.driver||jobDrivers(j)[0]||ME||''):ME;
   const docData={date:cur,jobId:j.id,site:jobSite(j),company:j.company||'',driver,by:(ctx&&ctx.email)||'',people,at:now,atMs:now.getTime()};
   ATT[j.id]=docData;renderPhotos();
   db.doc('attendance/'+cur+'_'+j.id).set(docData).catch(e=>{console.error(e);toast('Não consegui salvar a presença ('+(e.code||'erro')+')')});
@@ -647,7 +661,7 @@ const siteKey=(c,a)=>(akey(c||'')+'|'+akey(a||'')).slice(0,400);
 const jobSite=j=>siteKey(j.company,j.waiting?'':j.address);
 let photosUnsub=null,PHOTOS=[],photoQueue=0,galSite=null,galTitle='',galUnsub=null,GAL=[],viewing=null;
 const THUMB={};
-function myJobs(){if(!ME)return [];return D.jobs.filter(j=>j.crew.some(c=>c.v&&nkey(c.name)===nkey(ME)))}
+function myJobs(){if(!ME)return [];return D.jobs.filter(j=>jobDrivers(j).some(n=>nkey(n)===nkey(ME)))}
 function photoCount(j){const k=jobSite(j);const n=PHOTOS.filter(p=>p.site?p.site===k:p.jobId===j.id).length;return n?n+' hoje':''}
 function watchPhotos(){
   if(photosUnsub){photosUnsub();photosUnsub=null}
@@ -688,7 +702,7 @@ async function uploadPhotos(j,files){
       const full=await shrink(f,1600,0.72,850000),th=await shrink(f,320,0.6,55000);
       const id='p'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
       const now=new Date(),exp=new Date(now.getTime()+365*864e5);
-      const driver=P.fotos?((j.crew.find(c=>c.v)||{}).name||ME||''):ME;
+      const driver=P.fotos?(jobDrivers(j)[0]||ME||''):ME;
       const base={date:cur,jobId:j.id,driver,by:(ctx&&ctx.email)||''};
       const meta=Object.assign({},base,{site:jobSite(j),company:j.company||'',address:j.waiting?'':(j.address||''),at:now,atMs:now.getTime(),expireAt:exp,w:full.w,h:full.h});
       const fail=e=>{console.error(e);toast('A foto não foi salva ('+(e&&e.code||'erro')+')')};
