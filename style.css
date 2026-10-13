@@ -352,3 +352,5 @@ body.viewer{padding-bottom:24px}
 
 /* ---- link de demonstração ---- */
 .demobar{background:var(--hivis-soft);color:var(--ink);border:1px solid var(--hivis);border-radius:10px;padding:8px 12px;margin-top:10px;font-size:14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+
+.jobactions{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}

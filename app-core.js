@@ -359,7 +359,8 @@ function renderJobs(){
           ${picker||`<button class="btn" data-act="pickopen">+ Adicionar pessoas</button>`}
         </div>
         ${P.fotos?`<button class="btn phcount" data-act="photos">📷 Fotos da obra <b id="pc-${j.id}">${photoCount(j)}</b></button>`:''}
-        <div><button class="btn danger" data-act="del">${confirmDel===j.id?'Toque de novo pra apagar':'Apagar obra'}</button></div>
+        <div class="jobactions"><button class="btn" data-act="copynext">📋 Copiar pro dia seguinte</button>
+        <button class="btn danger" data-act="del">${confirmDel===j.id?'Toque de novo pra apagar':'Apagar obra'}</button></div>
       </div></article>`;
   }).join('')+(P.escala?'<button class="btn addend" id="addJobEnd">+ Nova obra</button>':''):'<div class="panel empty">Nenhuma obra neste dia. Toque em "+ Nova obra" ou "Copiar último dia".</div>';
   if(!P.escala)$('jobs').querySelectorAll('input,select,button:not([data-act="photos"])').forEach(el=>el.disabled=true);
@@ -440,6 +441,7 @@ $('jobs').addEventListener('click',e=>{
   else if(act==='auto'){j.autoShop=true;recompute(j)}
   else if(act==='early'){j.early=+b.dataset.m;recompute(j)}
   else if(act==='calc'){lookupTravel(j);return}
+  else if(act==='copynext'){copyJobToNext(j,b);return}
   else if(act==='paddr'){j.address=b.dataset.a;j.waiting=false;saveDay();renderJobs();lookupTravel(j);return}
   else if(act==='del'){if(confirmDel===j.id){jobs.splice(i,1);confirmDel=null}else{confirmDel=j.id;changed=false}}
   else changed=false;
@@ -447,6 +449,24 @@ $('jobs').addEventListener('click',e=>{
   renderJobs();
   if(act==='extra'){const inp=$('extra-'+j.id);if(inp)inp.focus()}
 });
+
+/* copiar uma obra só pro dia seguinte (não mexe nas outras) */
+async function copyJobToNext(j,btn){
+  const [y,m,d]=cur.split('-').map(Number);const next=iso(new Date(y,m-1,d+1));
+  const nice=dateBR(next);btn.disabled=true;
+  try{
+    const snap=await db.doc(dayPath(next)).get();const day=snap.exists?snap.data():{date:next,jobs:[],sent:{}};
+    const jobs=Array.isArray(day.jobs)?day.jobs:[];
+    const key=x=>akey((x.company||'')+'|'+(x.address||''));
+    if(jobs.some(x=>key(x)===key(j))){toast(`${j.company||'Essa obra'} já está em ${nice}`);return}
+    const {calc,prevAddr,...rest}=clone(j);
+    jobs.push(Object.assign(rest,{id:nid()}));
+    const drivers={};jobs.forEach(x=>{const n=jobDrivers({crew:x.crew||[]});if(n.length)drivers[x.id]=n});
+    await db.doc(dayPath(next)).set({date:next,jobs,sent:day.sent||{},drivers});
+    toast(`✓ ${j.company||'Obra'} copiada pra ${nice}`);
+  }catch(e){console.error(e);toast('Não consegui copiar ('+(e.code||'erro')+')')}
+  finally{btn.disabled=false}
+}
 
 /* ---------- barra de ferramentas ---------- */
 $('addJob').onclick=()=>{if(!dayLoaded)return;const j={id:nid(),company:'',address:'',waiting:false,attire:ATTIRE,shop:'',start:'07:00',crew:[],need:0,travel:null,autoShop:true,tk:'',early:30};D.jobs.push(j);openPick=j.id;saveDay();renderJobs();const card=document.querySelector('.job[data-id="'+j.id+'"]');if(card)card.scrollIntoView({block:'start',behavior:'smooth'});const el=$('co-'+j.id);if(el)el.focus({preventScroll:true})};
