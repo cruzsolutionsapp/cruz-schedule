@@ -329,7 +329,7 @@ function renderJobs(){
     return `<article class="job" data-id="${j.id}">
       <div class="job-head">
         <span class="num">${i+1}</span>
-        <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu às '+leftTime(j)+' (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span>${j.left?`<small>${leftTime(j)}</small>`:''}</button>
+        <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span></button>
         <input data-f="company" list="companyList" value="${esc(j.company)}" placeholder="Companhia" aria-label="Companhia" id="co-${j.id}">
         <span class="wkbadge" ${j.allWeek?'':'hidden'}>All Week</span>
         <button class="icon-btn" data-act="up" aria-label="Subir">↑</button>
@@ -440,7 +440,7 @@ $('jobs').addEventListener('click',e=>{
   else if(act==='extra'){const inp=$('extra-'+j.id);const n=fmtName(inp.value);if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:''})}
   else if(act==='up'&&i>0){jobs.splice(i,1);jobs.splice(i-1,0,j)}
   else if(act==='down'&&i<jobs.length-1){jobs.splice(i,1);jobs.splice(i+1,0,j)}
-  else if(act==='left'){j.left=j.left?0:Date.now()}
+  else if(act==='left'){j.left=j.left?0:Date.now();if(j.left&&j.allWeek){saveDay();copyJobToNext(j,b)}}   // All Week: ao confirmar a saída, já vai pro dia seguinte
   else if(act==='auto'){j.autoShop=true;recompute(j)}
   else if(act==='early'){j.early=+b.dataset.m;recompute(j)}
   else if(act==='calc'){lookupTravel(j);return}
