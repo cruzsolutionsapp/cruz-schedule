@@ -72,7 +72,7 @@ service cloud.firestore {
     match /config/roster {
       allow read: if isMember();
       allow create: if can('cadastro');
-      allow update: if can('cadastro') || (can('escala') && onlyChanged(['companies', 'travel']));
+      allow update: if can('cadastro') || (can('escala') && onlyChanged(['companies', 'travel', 'offices']));
     }
 
     // Telefones: só quem tem "Telefones e avisar equipe"

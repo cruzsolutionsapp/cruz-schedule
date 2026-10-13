@@ -59,8 +59,9 @@ function normRoster(d){return {workers:Array.isArray(d&&d.workers)?[...d.workers
   base:(d&&typeof d.base==='string'&&d.base.trim())?d.base:'599 Concord St, Holliston, MA 01746',
   buffer:(d&&Number.isFinite(d.buffer))?d.buffer:30,
   travel:(d&&d.travel&&typeof d.travel==='object')?{...d.travel}:{},
-  drivers:Array.isArray(d&&d.drivers)?d.drivers.filter(x=>typeof x==='string'):[]}}
-function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.forEach(j=>{j.id=j.id||nid();j.need=+j.need||0;delete j.calc;j.travel=Number.isFinite(j.travel)?j.travel:null;j.autoShop=!!j.autoShop;j.early=Number.isFinite(j.early)?j.early:30;j.tk=j.tk||'';j.crew=Array.isArray(j.crew)?j.crew:[];['company','address','attire','shop','start','note'].forEach(k=>j[k]=j[k]||'');j.allWeek=!!j.allWeek;j.waiting=!!j.waiting});return {date:cur,jobs,sent:(d&&d.sent&&typeof d.sent==='object')?{...d.sent}:{}}}
+  drivers:Array.isArray(d&&d.drivers)?d.drivers.filter(x=>typeof x==='string'):[],
+  offices:(d&&d.offices&&typeof d.offices==='object')?{...d.offices}:{}}}
+function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.forEach(j=>{j.id=j.id||nid();j.need=+j.need||0;delete j.calc;j.travel=Number.isFinite(j.travel)?j.travel:null;j.autoShop=!!j.autoShop;j.early=Number.isFinite(j.early)?j.early:30;j.tk=j.tk||'';j.crew=Array.isArray(j.crew)?j.crew:[];['company','address','attire','shop','start','note'].forEach(k=>j[k]=j[k]||'');j.allWeek=!!j.allWeek;j.waiting=!!j.waiting;j.office=!!j.office});return {date:cur,jobs,sent:(d&&d.sent&&typeof d.sent==='object')?{...d.sent}:{}}}
 
 /* evita re-render enquanto a pessoa digita */
 function typing(){const a=document.activeElement;return a&&(a.tagName==='INPUT'||a.tagName==='SELECT')&&!a.id.startsWith('extra-')&&a.id!=='newWorker'}
@@ -207,7 +208,10 @@ function syncShopUI(j){const sh=$('sh-'+j.id);if(sh&&sh!==document.activeElement
 
 function coKey(name){const n=(name||'').trim().toLowerCase();return n?Object.keys(S.companies).find(c=>c.toLowerCase()===n):undefined}
 function coAddrs(name){const k=coKey(name);return k?S.companies[k]:[]}
+// Office/shop da companhia (quando ela pede pra turma ir pro shop dela)
+function officeOf(name){const n=(name||'').trim().toLowerCase();if(!n)return '';const k=Object.keys(S.offices||{}).find(c=>c.toLowerCase()===n);return k?S.offices[k]:''}
 function addrPickHTML(j){
+  if(j.office)return '';
   const list=coAddrs(j.company);const curA=akey(j.address||'');
   const others=list.filter(a=>akey(a)!==curA);
   if(!others.length)return '';
@@ -215,6 +219,8 @@ function addrPickHTML(j){
 }
 function rememberAddr(j){
   const name=j.company.trim();if(!name)return;
+  if(j.office){const a=j.address.trim();if(!a)return;const k=coKey(name)||Object.keys(S.offices).find(c=>c.toLowerCase()===name.toLowerCase())||name;
+    if(S.offices[k]!==a){S.offices[k]=a;if(!(k in S.companies))S.companies[k]=[];saveRoster();renderRoster();toast('Office da '+k+' salvo pras próximas vezes')}return}
   const k=coKey(name)||name;const list=S.companies[k]||[];const a=j.address.trim();
   let changed=!(k in S.companies);
   if(a&&!j.waiting&&!list.some(x=>akey(x)===akey(a))){list.unshift(a);changed=true}
@@ -310,10 +316,11 @@ function renderJobs(){
         <button class="icon-btn" data-act="down" aria-label="Descer">↓</button>
       </div>
       <div class="job-body">
-        <label class="f">Endereço<input data-f="address" value="${esc(j.address)}" ${j.waiting?'disabled':''} placeholder="Rua, cidade, MA" id="ad-${j.id}"></label>
+        <label class="f">Endereço<input data-f="address" value="${esc(j.address)}" ${j.waiting?'disabled':''} placeholder="${j.office?'Endereço do office/shop da companhia':'Rua, cidade, MA'}" id="ad-${j.id}"></label>
         <div class="apick" id="ap-${j.id}">${addrPickHTML(j)}</div>
         <div class="travel" id="tv-${j.id}">${travelHTML(j)}</div>
-        <label class="check"><input type="checkbox" data-f="waiting" ${j.waiting?'checked':''} id="wt-${j.id}"> Esperando endereço</label>
+        <div class="checks"><label class="check"><input type="checkbox" data-f="waiting" ${j.waiting?'checked':''} id="wt-${j.id}"> Esperando endereço</label>
+        <label class="check office"><input type="checkbox" data-f="office" ${j.office?'checked':''} id="of-${j.id}"> 🏢 Ir pro office da companhia</label></div>
         <label class="f">Vestimenta<input data-f="attire" value="${esc(j.attire)}" id="at-${j.id}"></label>
         <div class="row">
           <label class="f">No shop<input type="time" data-f="shop" value="${esc(j.shop)}" id="sh-${j.id}"></label>
@@ -362,7 +369,14 @@ function refresh(save=true){
 $('jobs').addEventListener('input',e=>{
   const card=e.target.closest('.job');if(!card)return;const j=findJob(card.dataset.id);const f=e.target.dataset.f;
   if(!j||!f)return;
-  if(f==='waiting'){j.waiting=e.target.checked;card.querySelector('[data-f="address"]').disabled=j.waiting}
+  if(f==='waiting'){if(e.target.checked&&j.office){j.office=false;const o=card.querySelector('[data-f="office"]');if(o)o.checked=false}j.waiting=e.target.checked;card.querySelector('[data-f="address"]').disabled=j.waiting}
+  else if(f==='office'){
+    j.office=e.target.checked;const ad=card.querySelector('[data-f="address"]');
+    if(j.office){j.prevAddr=j.address;j.waiting=false;card.querySelector('[data-f="waiting"]').checked=false;ad.disabled=false;
+      const off=officeOf(j.company);j.address=off;ad.value=off;ad.placeholder='Endereço do office/shop da companhia';
+      if(!off){toast('Digite o endereço do office'+(j.company?' da '+j.company:'')+'. Fica salvo pras próximas vezes');ad.focus()}}
+    else{j.address=j.prevAddr||'';delete j.prevAddr;ad.value=j.address;ad.placeholder='Rua, cidade, MA'}
+    const ap=$('ap-'+j.id);if(ap)ap.innerHTML=addrPickHTML(j)}
   else if(f==='allWeek'){j.allWeek=e.target.checked;const t=card.querySelector('.wkbadge');if(t)t.hidden=!j.allWeek}
   else if(f==='need'){j.need=Math.max(0,Math.min(99,parseInt(e.target.value,10)||0));const el=$('nd-'+j.id);el.className='need '+needCls(j);el.textContent=needText(j)}
   else if(f==='travel'){const v=parseInt(e.target.value,10);j.travel=Number.isFinite(v)&&v>=0?v:null;
@@ -371,7 +385,8 @@ $('jobs').addEventListener('input',e=>{
   else if(f==='shop'){j.shop=e.target.value;if(j.autoShop){j.autoShop=false;syncShopUI(j)}}
   else if(f==='start'){j.start=e.target.value;if(recompute(j))syncShopUI(j)}
   else j[f]=e.target.value;
-  if(f==='company'){const list=coAddrs(j.company);
+  if(f==='company'&&j.office){const off=officeOf(j.company);if(off){j.address=off;card.querySelector('[data-f="address"]').value=off}}
+  else if(f==='company'){const list=coAddrs(j.company);
     if(list.length===1&&!j.address.trim()&&!j.waiting){j.address=list[0];card.querySelector('[data-f="address"]').value=j.address}}
   if(f==='company'||f==='address'){const ap=$('ap-'+j.id);if(ap)ap.innerHTML=addrPickHTML(j)}
   refresh();
@@ -381,7 +396,8 @@ $('jobs').addEventListener('change',e=>{
   if(e.target.dataset.act==='veh'){j.crew[+e.target.dataset.ci].v=e.target.value;saveDay();e.target.blur();renderJobs();return}
   const f=e.target.dataset.f;
   if(f==='company'||f==='address')rememberAddr(j);
-  if(f==='address'||f==='company'||f==='waiting')lookupTravel(j);
+  if(f==='office'&&j.office&&j.address.trim())rememberAddr(j);
+  if(f==='address'||f==='company'||f==='waiting'||f==='office')lookupTravel(j);
 });
 $('jobs').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id&&e.target.id.startsWith('extra-')){e.preventDefault();e.target.nextElementSibling.click()}});
 $('jobs').addEventListener('click',e=>{
@@ -485,6 +501,7 @@ function renderRoster(){
     <div class="cohead"><b>${esc(c)}</b><span class="cocount">${S.companies[c].length} endereço${S.companies[c].length===1?'':'s'}</span>
       <button class="linkbtn" data-cadd="${esc(c)}">+ endereço</button>
       <button class="x" data-cdel="${esc(c)}" aria-label="Remover ${esc(c)}">×</button></div>
+    <div class="lrow offrow"><span class="offlbl">🏢 Office</span><input class="grow" data-off="${esc(c)}" value="${esc(S.offices[c]||'')}" placeholder="Endereço do office/shop (se a companhia pedir)" aria-label="Office de ${esc(c)}" id="off-${i}"></div>
     ${S.companies[c].map((a,ai)=>`<div class="lrow"><input class="grow" data-co="${esc(c)}" data-ai="${ai}" value="${esc(a)}" placeholder="Endereço" aria-label="Endereço de ${esc(c)}" id="cad-${i}-${ai}">
       <button class="x" data-adel="${esc(c)}" data-ai="${ai}" aria-label="Remover endereço">×</button></div>`).join('')}
   </div>`).join('')||'<span class="empty">As companhias aparecem aqui conforme você cria obras.</span>';
@@ -538,6 +555,7 @@ $('addWorker').onclick=addWorker;$('newWorker').onkeydown=e=>{if(e.key==='Enter'
 $('vehicles').addEventListener('input',e=>{const t=e.target;if(t.dataset.vi!=null){S.vehicles[+t.dataset.vi][t.dataset.k]=t.value.trim();saveRoster()}});
 $('vehicles').onclick=e=>{const b=e.target.closest('[data-vdel]');if(b){S.vehicles.splice(+b.dataset.vdel,1);saveRoster();renderRoster()}};
 $('addVehicle').onclick=()=>{S.vehicles.push({n:'',t:'🛻'});saveRoster();renderRoster();const el=$('veh-'+(S.vehicles.length-1));if(el)el.focus()};
+$('companies').addEventListener('input',e=>{const c=e.target.dataset.off;if(c==null)return;const v=e.target.value.trim();if(v)S.offices[c]=v;else delete S.offices[c];saveRoster()});
 $('companies').oninput=e=>{const c=e.target.dataset.co;if(c!=null&&S.companies[c]){S.companies[c][+e.target.dataset.ai]=e.target.value;saveRoster()}};
 $('companies').addEventListener('change',e=>{const c=e.target.dataset.co;if(c!=null&&S.companies[c]){S.companies[c]=S.companies[c].map(a=>a.trim()).filter(Boolean);saveRoster();renderRoster()}});
 $('companies').onclick=e=>{

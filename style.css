@@ -306,3 +306,7 @@ body.viewer{padding-bottom:24px}
 
 .attmini{display:inline-flex;gap:3px;flex:none}
 .attb.sm{padding:0;width:30px;height:30px;font-size:15px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+
+.checks{display:flex;flex-wrap:wrap;gap:6px 18px}
+.check.office{color:var(--ink)}
+.offrow .offlbl{flex:none;font-size:13px;color:var(--muted);width:72px}
