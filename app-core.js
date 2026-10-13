@@ -329,8 +329,8 @@ function renderJobs(){
     return `<article class="job" data-id="${j.id}">
       <div class="job-head">
         <span class="num">${i+1}</span>
-        <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span></button>
         <input data-f="company" list="companyList" value="${esc(j.company)}" placeholder="Companhia" aria-label="Companhia" id="co-${j.id}">
+        <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span></button>
         <span class="wkbadge" ${j.allWeek?'':'hidden'}>All Week</span>
         <button class="icon-btn" data-act="up" aria-label="Subir">↑</button>
         <button class="icon-btn" data-act="down" aria-label="Descer">↓</button>
