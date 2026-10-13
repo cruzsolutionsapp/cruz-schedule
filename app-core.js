@@ -481,6 +481,25 @@ $('workers').addEventListener('change',e=>{const n=e.target.dataset.wp;if(n==nul
   savePhones();renderNotify()});
 $('workers').onclick=e=>{const b=e.target.closest('[data-wi]');if(b){S.workers.splice(+b.dataset.wi,1);saveRoster();renderRoster();refresh(false)}};
 function addWorker(){const n=$('newWorker').value.trim();if(n&&!S.workers.some(w=>w.toLowerCase()===n.toLowerCase())){S.workers.push(n);S.workers.sort((a,b)=>a.localeCompare(b,'pt'));saveRoster();renderRoster();refresh(false)}$('newWorker').value='';$('newWorker').focus()}
+$('bulkAdd').onclick=()=>{
+  if(!P.cadastro)return;
+  const lines=$('bulkText').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  let added=0,phones=0,dup=0;
+  lines.forEach(l=>{
+    const m=l.match(/^(.*?)[\s,;:\-–]*((?:\+?1[\s.\-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})\s*$/);
+    const name=(m?m[1]:l).replace(/[,;:\-–]+$/,'').replace(/\s+/g,' ').trim();
+    const ph=m?m[2].trim():'';
+    if(!name)return;
+    const ex=S.workers.find(w=>nkey(w)===nkey(name));
+    if(ex)dup++;else{S.workers.push(name);added++}
+    if(ph&&P.telefones){const k=Object.keys(PH).find(p=>nkey(p)===nkey(name))||ex||name;PH[k]=ph;phones++}
+  });
+  S.workers.sort((a,b)=>a.localeCompare(b,'pt'));
+  if(added)saveRoster();if(phones)savePhones();
+  renderRoster();refresh(false);
+  $('bulkText').value='';
+  toast(`${added} adicionado${added===1?'':'s'}`+(phones?`, ${phones} telefone${phones===1?'':'s'}`:'')+(dup?` · ${dup} já existia${dup===1?'':'m'}`:''));
+};
 $('addWorker').onclick=addWorker;$('newWorker').onkeydown=e=>{if(e.key==='Enter')addWorker()};
 $('vehicles').addEventListener('input',e=>{const t=e.target;if(t.dataset.vi!=null){S.vehicles[+t.dataset.vi][t.dataset.k]=t.value.trim();saveRoster()}});
 $('vehicles').onclick=e=>{const b=e.target.closest('[data-vdel]');if(b){S.vehicles.splice(+b.dataset.vdel,1);saveRoster();renderRoster()}};
