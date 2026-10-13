@@ -205,3 +205,5 @@ label.btn{display:inline-flex;align-items:center}
 .viewer .preview-col{position:static}
 .viewer .chat{max-height:none}
 .viewer .bubble{font-size:16px}
+.viewer .bar,.viewer #msgTitle ~ .hint{display:none!important}
+body.viewer{padding-bottom:24px}
