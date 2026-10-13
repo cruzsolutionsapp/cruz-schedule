@@ -1,6 +1,6 @@
 
 function startApp(db,ctx){
-const P=Object.assign({escala:true,apagar:true,cadastro:true,telefones:true,backup:true},(ctx&&ctx.perms)||{});
+const P=Object.assign({escala:true,apagar:true,cadastro:true,telefones:true,backup:true,fotos:true},(ctx&&ctx.perms)||{});
 const isAdmin=!!(ctx&&ctx.isAdmin);
 ['escala','apagar','cadastro','telefones','backup'].forEach(k=>document.body.classList.toggle('no-'+k,!P[k]));
 const viewer=!P.escala&&!P.cadastro&&!P.apagar;   // só visualiza: mostra apenas a mensagem do dia
@@ -85,6 +85,7 @@ function watchDay(){
   dayLoaded=false;D={date:cur,jobs:[],sent:{}};
   const path=dayPath(cur);
   renderJobs();
+  watchPhotos();
   unsubDay=db.doc(path).onSnapshot(snap=>{
     if(path!==dayPath(cur))return;
     if(pend[path])return;
@@ -315,10 +316,11 @@ function renderJobs(){
           ${crew}
           ${picker||`<button class="btn" data-act="pickopen">+ Adicionar pessoas</button>`}
         </div>
+        ${P.fotos?`<button class="btn phcount" data-act="photos">📷 Fotos da obra <b id="pc-${j.id}">${photoCount(j.id)}</b></button>`:''}
         <div><button class="btn danger" data-act="del">${confirmDel===j.id?'Toque de novo pra apagar':'Apagar obra'}</button></div>
       </div></article>`;
   }).join(''):'<div class="panel empty">Nenhuma obra neste dia. Toque em "+ Nova obra" ou "Copiar último dia".</div>';
-  if(!P.escala)$('jobs').querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
+  if(!P.escala)$('jobs').querySelectorAll('input,select,button:not([data-act="photos"])').forEach(el=>el.disabled=true);
   $('jobs').insertAdjacentHTML('beforeend',`<datalist id="companyList">${Object.keys(S.companies).map(c=>`<option value="${esc(c)}">`).join('')}</datalist>`);
   refresh(false);
 }
@@ -331,6 +333,7 @@ function refresh(save=true){
   $('free').innerHTML=free.map(w=>`<span class="chip">${esc(w)}</span>`).join('')||'<span class="empty">Todos os fixos estão escalados.</span>';
   $('freeCount').textContent=free.length+' de '+S.workers.length;
   if(!(document.activeElement&&document.activeElement.classList.contains('ntphone')))renderNotify();
+  renderPhotos();
   const people=D.jobs.reduce((s,j)=>s+j.crew.length,0);
   const bad=out.filter(o=>o[0]!=='ok').length;
   const needed=D.jobs.reduce((s,j)=>s+Math.max(j.need||0,j.crew.length),0);
@@ -368,6 +371,7 @@ $('jobs').addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b||b.tagName==='SELECT')return;
   const card=b.closest('.job');const j=findJob(card.dataset.id);if(!j)return;const jobs=D.jobs;const i=jobs.indexOf(j);
   const act=b.dataset.act;let changed=true;
+  if(act==='photos'){openGallery(j.id);return}
   if(!P.escala)return;
   if(act==='del'&&!P.apagar)return;
   if(act!=='del')confirmDel=null;
@@ -521,7 +525,7 @@ const csvCell=v=>{v=String(v??'');return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'
 const toCSV=rows=>'﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
 const BK='schedule-equipe-lastbackup';
 function showLastBackup(){try{const v=localStorage.getItem(BK);$('lastBackup').textContent=v?'último neste aparelho: '+v:''}catch(e){}}
-const dl={save:async({filename,data})=>{const b=new Blob([data],{type:filename.endsWith('.json')?'application/json':'text/csv;charset=utf-8'});
+const dl={save:async({filename,data})=>{const b=data instanceof Blob?data:new Blob([data],{type:filename.endsWith('.json')?'application/json':'text/csv;charset=utf-8'});
   const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);return {status:'saved'}}};
 async function allDays(){
   if(!db){const out=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k.startsWith(LKEY+'days/')){try{out.push(JSON.parse(localStorage.getItem(k)))}catch(e){}}}return out}
@@ -587,6 +591,95 @@ $('importInfo').addEventListener('click',async e=>{
     toast('Importação concluída');pendingImport=null;$('importInfo').hidden=true;renderRoster();watchDay();
   }catch(err){console.error(err);toast('Falhou a importação: '+(err&&err.code||'erro'))}
 });
+
+/* ---------- fotos da obra (versão de teste: fotos guardadas no banco) ---------- */
+const ME=(ctx&&ctx.worker)||'';
+let photosUnsub=null,PHOTOS=[],photoQueue=0,galleryJob=null,viewing=null;
+function myJobs(){if(!ME)return [];return D.jobs.filter(j=>j.crew.some(c=>c.v&&nkey(c.name)===nkey(ME)))}
+function photoCount(id){const n=PHOTOS.filter(p=>p.jobId===id).length;return n?String(n):''}
+function watchPhotos(){
+  if(photosUnsub){photosUnsub();photosUnsub=null}
+  PHOTOS=[];
+  if(!P.fotos&&!ME){renderPhotos();return}
+  let q=db.collection('photos').where('date','==',cur);
+  if(!P.fotos)q=q.where('driver','==',ME);
+  photosUnsub=q.onSnapshot(s=>{
+    PHOTOS=s.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>(a.atMs||0)-(b.atMs||0));
+    renderPhotos();D.jobs.forEach(j=>{const el=$('pc-'+j.id);if(el)el.textContent=photoCount(j.id)});
+    if(galleryJob)renderGallery();
+  },e=>console.error(e));
+}
+async function shrink(file,max,q,limit){
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url});
+    let w=img.naturalWidth,h=img.naturalHeight;const s=Math.min(1,max/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);
+    const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
+    let qq=q,out=c.toDataURL('image/jpeg',qq);
+    while(out.length>limit&&qq>0.3){qq-=0.1;out=c.toDataURL('image/jpeg',qq)}
+    return {data:out,w,h};
+  }finally{URL.revokeObjectURL(url)}
+}
+async function uploadPhotos(j,files){
+  let ok=0;
+  for(const f of files){
+    if(!f.type||!f.type.startsWith('image/'))continue;
+    photoQueue++;renderPhotos();if(galleryJob)renderGallery();
+    try{
+      const full=await shrink(f,1600,0.72,850000),th=await shrink(f,320,0.6,55000);
+      const id='p'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+      const now=new Date(),exp=new Date(now.getTime()+365*864e5);
+      const driver=P.fotos?((j.crew.find(c=>c.v)||{}).name||ME||''):ME;
+      const meta={date:cur,jobId:j.id,company:j.company||'',address:j.waiting?'':(j.address||''),driver,by:(ctx&&ctx.email)||'',at:now,atMs:now.getTime(),expireAt:exp,w:full.w,h:full.h};
+      const fail=e=>{console.error(e);toast('A foto não foi salva ('+(e&&e.code||'erro')+')')};
+      db.doc('photoFull/'+id).set(Object.assign({},meta,{data:full.data})).catch(fail);
+      db.doc('photos/'+id).set(Object.assign({},meta,{thumb:th.data})).catch(fail);
+      ok++;
+    }catch(e){console.error(e);toast('Não consegui ler uma das fotos')}
+    photoQueue--;renderPhotos();if(galleryJob)renderGallery();
+  }
+  if(ok)toast(navigator.onLine?(ok>1?ok+' fotos enviadas':'Foto enviada'):'Sem internet: as fotos sobem quando a conexão voltar');
+}
+const camBtns=jid=>`<div class="phbtns"><label class="btn primary phbtn">📷 Tirar foto<input type="file" accept="image/*" capture="environment" hidden data-upjob="${jid}"></label>
+  <label class="btn phbtn2">🖼️ Da galeria<input type="file" accept="image/*" multiple hidden data-upjob="${jid}"></label></div>`;
+const thumbs=list=>list.length?`<div class="phgrid">${list.map(p=>`<button class="phthumb" data-ph="${p.id}" aria-label="Abrir foto"><img src="${p.thumb}" alt=""><span>${esc(new Date(p.atMs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))}</span></button>`).join('')}</div>`:'<span class="empty">Nenhuma foto ainda.</span>';
+function renderPhotos(){
+  const box=$('photosPanel');if(!box)return;
+  const jobs=myJobs();
+  if(!ME||!jobs.length){box.hidden=true;return}
+  box.hidden=false;
+  $('photosBody').innerHTML=jobs.map(j=>`<div class="phjob"><div class="phhead"><b>${esc(j.company||'Obra')}</b><small>${esc(j.waiting?'Endereço a confirmar':j.address)}</small></div>
+    ${camBtns(j.id)}${thumbs(PHOTOS.filter(p=>p.jobId===j.id))}</div>`).join('')+(photoQueue?`<p class="hint">Preparando ${photoQueue} foto(s)…</p>`:'');
+}
+function openGallery(jid){galleryJob=jid;$('gallery').hidden=false;document.body.classList.add('modal-open');renderGallery()}
+function closeGallery(){galleryJob=null;$('gallery').hidden=true;document.body.classList.remove('modal-open')}
+function renderGallery(){
+  const j=findJob(galleryJob);if(!j){closeGallery();return}
+  const list=PHOTOS.filter(p=>p.jobId===j.id);
+  $('galTitle').textContent=(j.company||'Obra')+' · '+dateBR();
+  $('galBody').innerHTML=camBtns(j.id)+(photoQueue?`<p class="hint">Preparando ${photoQueue} foto(s)…</p>`:'')+
+    (list.length?`<div class="phgrid big">${list.map(p=>`<button class="phthumb" data-ph="${p.id}" aria-label="Abrir foto"><img src="${p.thumb}" alt=""><span>${esc(p.driver||'')} · ${esc(new Date(p.atMs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))}</span></button>`).join('')}</div>`:'<p class="empty">Nenhuma foto desta obra neste dia.</p>');
+}
+async function openViewer(id){
+  const p=PHOTOS.find(x=>x.id===id);if(!p)return;
+  viewing=p;$('phview').hidden=false;document.body.classList.add('modal-open');
+  $('pvImg').src=p.thumb;$('pvInfo').textContent=`${p.company} · ${p.driver||''} · ${new Date(p.atMs).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`;
+  $('pvDel').hidden=!(P.fotos||p.by===(ctx&&ctx.email));$('pvDel').textContent='Apagar';delete $('pvDel').dataset.confirm;
+  try{const s=await db.doc('photoFull/'+id).get();if(viewing===p&&s.exists)$('pvImg').src=s.data().data}catch(e){console.error(e)}
+}
+function closeViewer(){viewing=null;$('phview').hidden=true;$('pvImg').src='';if(!galleryJob)document.body.classList.remove('modal-open')}
+document.addEventListener('change',e=>{const jid=e.target.dataset&&e.target.dataset.upjob;if(!jid)return;const j=findJob(jid);const files=[...e.target.files];e.target.value='';if(j&&files.length)uploadPhotos(j,files)});
+document.addEventListener('click',e=>{const t=e.target.closest('[data-ph]');if(t){openViewer(t.dataset.ph)}});
+$('galClose').onclick=closeGallery;$('gallery').addEventListener('click',e=>{if(e.target.id==='gallery')closeGallery()});
+$('pvClose').onclick=closeViewer;$('phview').addEventListener('click',e=>{if(e.target.id==='phview')closeViewer()});
+$('pvSave').onclick=async()=>{if(!viewing)return;const p=viewing;
+  const blob=await (await fetch($('pvImg').src)).blob();const t=new Date(p.atMs);
+  await dl.save({filename:`${p.date}_${(p.company||'obra').replace(/[^\w-]+/g,'-')}_${pad(t.getHours())}${pad(t.getMinutes())}.jpg`,data:blob})};
+$('pvDel').onclick=async()=>{if(!viewing)return;const b=$('pvDel');
+  if(b.dataset.confirm!=='1'){b.dataset.confirm='1';b.textContent='Toque de novo pra apagar';return}
+  const id=viewing.id;closeViewer();
+  try{await db.doc('photos/'+id).delete();await db.doc('photoFull/'+id).delete();toast('Foto apagada')}catch(e){toast('Não consegui apagar ('+(e.code||'erro')+')')}};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(viewing)closeViewer();else if(galleryJob)closeGallery()}});
 
 /* ---------- início ---------- */
 if(viewer)tab('day');

@@ -21,6 +21,17 @@ service cloud.firestore {
     function can(p) {
       return isMember() && (member().role == 'admin' || member().get('perms', {}).get(p, true) == true);
     }
+    // Trabalhador ligado a este login (aba Acesso → "É o trabalhador")
+    function myWorker() {
+      return member().get('worker', '');
+    }
+    function isMyPhoto(d) {
+      return isMember() && myWorker() != '' && d.driver == myWorker();
+    }
+    function photoOk(d) {
+      return d.by == me() && d.date is string && d.jobId is string && d.driver is string
+        && (can('fotos') || isMyPhoto(d));
+    }
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
@@ -52,6 +63,19 @@ service cloud.firestore {
     // Telefones: só quem tem "Telefones e avisar equipe"
     match /config/phones {
       allow read, write: if can('telefones');
+    }
+
+    // Fotos da obra (versão de teste: guardadas no banco). Miniatura em /photos, foto grande em /photoFull.
+    // O motorista vê só as fotos das obras em que ele é o motorista; quem tem "Ver todas as fotos" vê tudo.
+    match /photos/{id} {
+      allow read: if can('fotos') || isMyPhoto(resource.data);
+      allow create: if photoOk(request.resource.data) && request.resource.data.thumb.size() < 60000;
+      allow delete: if can('fotos') || (isMember() && resource.data.by == me());
+    }
+    match /photoFull/{id} {
+      allow read: if can('fotos') || isMyPhoto(resource.data);
+      allow create: if photoOk(request.resource.data) && request.resource.data.data.size() < 900000;
+      allow delete: if can('fotos') || (isMember() && resource.data.by == me());
     }
 
     // Escala de cada dia

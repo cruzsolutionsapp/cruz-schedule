@@ -27,12 +27,14 @@ const qb = (ref, cons = []) => ({
   where: (f, op, v) => qb(ref, [...cons, where(f, op, v)]),
   orderBy: (f, d) => qb(ref, [...cons, orderBy(f, d)]),
   limit: n => qb(ref, [...cons, limit(n)]),
-  get: async () => { const s = await getDocs(query(ref, ...cons)); return { docs: s.docs.map(wrap), size: s.size }; }
+  get: async () => { const s = await getDocs(query(ref, ...cons)); return { docs: s.docs.map(wrap), size: s.size }; },
+  onSnapshot: (n, e) => onSnapshot(query(ref, ...cons), s => n({ docs: s.docs.map(wrap), size: s.size }), e)
 });
 const dbw = {
   doc: p => { const r = doc(fs, p); return {
     set: d => setDoc(r, d),
     get: async () => wrap(await getDoc(r)),
+    delete: () => deleteDoc(r),
     onSnapshot: (n, e) => onSnapshot(r, s => n(wrap(s)), e)
   }; },
   collection: p => qb(collection(fs, p))
@@ -125,17 +127,20 @@ async function route(u) {
   $('tab-access').hidden = !isAdmin;
   $('logout').onclick = () => { try { started && started.flushAll(); } catch (e) {} signOut(auth); };
   $('logout2').onclick = $('logout').onclick;
-  started = window.startApp(dbw, { email: me, isAdmin, perms });
+  started = window.startApp(dbw, { email: me, isAdmin, perms, worker: md.worker || '' });
   setupMembers(isAdmin, me);
 }
 onAuthStateChanged(auth, route);
 
 /* ----- gerenciar quem tem acesso (só administrador) ----- */
-const PERMS = [['escala', 'Editar escala'], ['apagar', 'Apagar obras'], ['cadastro', 'Editar cadastro'], ['telefones', 'Telefones e avisar equipe'], ['backup', 'Baixar backup']];
-const NEW_DEFAULT = { escala: true, apagar: false, cadastro: false, telefones: true, backup: false };
+const PERMS = [['escala', 'Editar escala'], ['apagar', 'Apagar obras'], ['cadastro', 'Editar cadastro'], ['telefones', 'Telefones e avisar equipe'], ['backup', 'Baixar backup'], ['fotos', 'Ver todas as fotos']];
+const NEW_DEFAULT = { escala: true, apagar: false, cadastro: false, telefones: true, backup: false, fotos: false };
 const permBoxes = (p, isAdm, prefix, lockAll) =>
   `<label class="perm admin"><input type="checkbox" data-adm="1" ${isAdm ? 'checked' : ''} ${lockAll ? 'disabled' : ''} id="${prefix}-admin"> Admin (tudo + acesso)</label>` +
   PERMS.map(([k, t]) => `<label class="perm"><input type="checkbox" data-perm="${k}" ${isAdm || p[k] ? 'checked' : ''} ${isAdm || lockAll ? 'disabled' : ''} id="${prefix}-${k}"> ${t}</label>`).join('');
+let WORKERS = [];
+const workerSel = (cur, id) => `<label class="wlink">É o trabalhador <select data-worker="1" id="${id}"><option value="">— ninguém (escritório) —</option>${
+  [...new Set([...WORKERS, ...(cur ? [cur] : [])])].sort((a, b) => a.localeCompare(b, 'pt')).map(w => `<option${w === cur ? ' selected' : ''}>${esc(w)}</option>`).join('')}</select></label>`;
 const fullPerms = r => { const o = {}; PERMS.forEach(([k]) => o[k] = r.perms && k in r.perms ? !!r.perms[k] : true); return o; };
 
 function setupMembers(isAdmin, me) {
@@ -143,19 +148,31 @@ function setupMembers(isAdmin, me) {
   const msgEl = $('memberMsg');
   const fail = err => { msgEl.textContent = 'Não consegui salvar (' + (err.code || 'erro') + '). Confira se as regras novas foram publicadas no Firebase.'; };
   let rows = [];
-  onSnapshot(collection(fs, 'members'), s => {
-    rows = s.docs.map(d => d.data()).sort((a, b) => (a.email === me ? -1 : b.email === me ? 1 : (a.email || '').localeCompare(b.email || '')));
+  const draw = () => {
+    if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#members')) return;
     $('members').innerHTML = rows.map((r, i) => `<div class="mcard" data-email="${esc(r.email)}">
       <div class="mhead"><b>${esc(r.email)}</b>${r.email === me ? '<span class="youtag">você</span>' : `<button class="x" data-mdel="1" aria-label="Tirar acesso de ${esc(r.email)}">×</button>`}</div>
+      ${workerSel(r.worker || '', 'mw' + i)}
       <div class="perms">${permBoxes(fullPerms(r), r.role === 'admin', 'm' + i, r.email === me)}</div></div>`).join('') || '<span class="empty">Ninguém liberado ainda.</span>';
+  };
+  onSnapshot(collection(fs, 'members'), s => {
+    rows = s.docs.map(d => d.data()).sort((a, b) => (a.email === me ? -1 : b.email === me ? 1 : (a.email || '').localeCompare(b.email || '')));
+    draw();
+  }, () => {});
+  onSnapshot(doc(fs, 'config', 'roster'), s => {
+    WORKERS = (s.exists() && Array.isArray(s.data().workers)) ? s.data().workers : [];
+    draw();
+    const cur = $('newWorkerLink') ? $('newWorkerLink').value : '';
+    $('newLink').innerHTML = workerSel(cur, 'newWorkerLink');
   }, () => {});
   $('members').addEventListener('change', async e => {
     const card = e.target.closest('.mcard'); if (!card) return;
     const email = card.dataset.email;
     const role = card.querySelector('[data-adm]').checked ? 'admin' : 'member';
     const perms = {}; card.querySelectorAll('[data-perm]').forEach(c => perms[c.dataset.perm] = c.checked);
+    const worker = card.querySelector('[data-worker]').value;
     if (role === 'admin') card.querySelectorAll('[data-perm]').forEach(c => { c.checked = true; c.disabled = true; });
-    try { await setDoc(doc(fs, 'members', email), { email, role, perms, at: serverTimestamp() }); msgEl.textContent = 'Permissões de ' + email + ' salvas.'; }
+    try { await setDoc(doc(fs, 'members', email), { email, role, perms, worker, at: serverTimestamp() }); msgEl.textContent = 'Permissões de ' + email + ' salvas.'; e.target.blur(); }
     catch (err) { fail(err); }
   });
   $('members').addEventListener('click', async e => {
@@ -171,7 +188,8 @@ function setupMembers(isAdmin, me) {
     const role = $('newPerms').querySelector('[data-adm]').checked ? 'admin' : 'member';
     const perms = {}; $('newPerms').querySelectorAll('[data-perm]').forEach(c => perms[c.dataset.perm] = c.checked);
     try {
-      await setDoc(doc(fs, 'members', em), { email: em, role, perms, at: serverTimestamp() });
+      const worker = $('newWorkerLink') ? $('newWorkerLink').value : '';
+      await setDoc(doc(fs, 'members', em), { email: em, role, perms, worker, at: serverTimestamp() });
       $('newMember').value = ''; $('newPerms').innerHTML = permBoxes(NEW_DEFAULT, false, 'np', false);
       msgEl.textContent = 'Liberado! Peça pra pessoa abrir o app e tocar em "Primeiro acesso".';
     } catch (err) { fail(err); }
