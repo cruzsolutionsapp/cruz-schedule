@@ -280,3 +280,7 @@ body.viewer{padding-bottom:24px}
 .drvtag.on{background:var(--hivis);border-color:var(--hivis);color:var(--hivis-ink);font-weight:600}
 @media (max-width:480px){.drvtag span{display:none}}
 .drvmini{font-size:13px}
+
+.mord{display:inline-flex;gap:2px;flex:none}
+.mv{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:6px;width:28px;height:28px;font-size:14px;line-height:1;cursor:pointer;padding:0}
+.mv:disabled{opacity:.3;cursor:default}

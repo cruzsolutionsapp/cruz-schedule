@@ -46,7 +46,7 @@ function flush(path){
 // drivers: {jobId:[nomes com veículo]} — o banco usa pra conferir que só o motorista daquela obra marca presença/fotos
 // Responsável pela obra = quem está marcado como Motorista no Cadastro, ou quem está com veículo da empresa
 const isDriverName=n=>!!(S&&S.drivers||[]).find(x=>nkey(x)===nkey(n));
-const jobDrivers=j=>j.crew.filter(c=>c.v||isDriverName(c.name)).sort((a,b)=>(isDriverName(b.name)?1:0)-(isDriverName(a.name)?1:0)).map(c=>c.name);
+const jobDrivers=j=>j.crew.filter(c=>isCompanyVeh(c.v)||isDriverName(c.name)).sort((a,b)=>(isDriverName(b.name)?1:0)-(isDriverName(a.name)?1:0)).map(c=>c.name);
 const driversMap=()=>{const m={};D.jobs.forEach(j=>{const n=jobDrivers(j);if(n.length)m[j.id]=n});return m};
 const saveDay=()=>(P.escala||P.telefones)&&(lastDrivers=driversMap(),queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{},drivers:lastDrivers}));
 const saveRoster=()=>(P.cadastro||P.escala)&&queue(ROSTER,S);
@@ -109,7 +109,9 @@ function watchDay(){
 
 /* ---------- mensagem / análise ---------- */
 function fmt(t){if(!t)return'';let[h,m]=t.split(':').map(Number);const ap=h>=12?'pm':'am';h=h%12||12;return h+':'+pad(m)+ap}
-function vLabel(n){const v=S.vehicles.find(x=>x.n===n);return v?v.t+'('+v.n+')':'('+n+')'}
+const OWN='own';   // carro próprio (🚗): vai direto pra obra no carro dele
+const isCompanyVeh=v=>!!v&&v!==OWN;
+function vLabel(n){if(n===OWN)return '🚗';const v=S.vehicles.find(x=>x.n===n);return v?v.t+'('+v.n+')':'('+n+')'}
 function buildMsg(){
   return D.jobs.map(j=>{
     const L=['✅ '+(j.company.trim()||'(sem nome)')];
@@ -120,7 +122,7 @@ function buildMsg(){
     if(j.note&&j.note.trim())L.push('('+j.note.trim().replace(/^\(|\)$/g,'')+')');
     if(j.allWeek)L.push('(All Week)');
     L.push('');
-    [...j.crew].sort((a,b)=>(b.v?1:0)-(a.v?1:0)).forEach(c=>L.push('\t✓ '+c.name+(c.v?' '+vLabel(c.v):'')));
+    j.crew.forEach(c=>L.push('\t✓ '+c.name+(c.v?' '+vLabel(c.v):'')));
     L.push('__');
     return L.join('\n');
   }).join('\n');
@@ -129,7 +131,7 @@ function analyze(){
   const byName={},byVeh={};
   D.jobs.forEach(j=>j.crew.forEach(c=>{
     const k=c.name.trim().toLowerCase();(byName[k]=byName[k]||[]).push(j.company||'?');
-    if(c.v)(byVeh[c.v]=byVeh[c.v]||[]).push(j.company||'?');
+    if(isCompanyVeh(c.v))(byVeh[c.v]=byVeh[c.v]||[]).push(j.company||'?');
   }));
   const dupNames=Object.keys(byName).filter(k=>byName[k].length>1);
   const out=[];
@@ -139,7 +141,7 @@ function analyze(){
     const nm=j.company||'Obra sem nome';
     if(j.need&&j.crew.length<j.need){const f=j.need-j.crew.length;out.push(['bad',`${nm}: falta${f>1?'m':''} ${f} pessoa${f>1?'s':''} (${j.crew.length} de ${j.need})`])}
     const faltou=absentNames(j);if(faltou.length)out.push(['bad',`${nm}: ${faltou.join(', ')} ${faltou.length>1?'faltaram':'faltou'} (confirmado pelo motorista)`]);
-    if(j.crew.length&&!j.crew.some(c=>c.v))out.push(['warn',`${nm}: ninguém com veículo`]);
+    if(j.crew.length&&!j.crew.some(c=>isCompanyVeh(c.v)))out.push(['warn',`${nm}: ninguém com veículo`]);
     if(!j.crew.length&&!j.need)out.push(['warn',`${nm}: sem equipe`]);
     if(!j.waiting&&!j.address.trim())out.push(['warn',`${nm}: falta endereço (ou marque "Esperando")`]);
   });
@@ -232,7 +234,7 @@ function personalMsg(c,j){
   if(j.start)L.push('⏰ start '+fmt(j.start));
   if(j.note&&j.note.trim())L.push('('+j.note.trim().replace(/^\(|\)$/g,'')+')');
   if(j.allWeek)L.push('(All Week)');
-  if(c.v)L.push('','Você leva o '+vLabel(c.v));
+  if(c.v===OWN)L.push('','Você vai no seu carro direto pra obra 🚗');else if(c.v)L.push('','Você leva o '+vLabel(c.v));
   const mates=j.crew.filter(x=>x!==c).map(x=>x.name);
   if(mates.length)L.push('','Equipe: '+mates.join(', '));
   return L.filter((x,i,a)=>!(x===''&&a[i-1]==='')).join('\n');
@@ -274,7 +276,7 @@ $('notify').addEventListener('change',e=>{const n=e.target.dataset.phone;if(n==n
 function needCls(j){if(!j.need)return'';return j.crew.length<j.need?'short':j.crew.length>j.need?'over':'full'}
 function needText(j){const n=j.crew.length;if(!j.need)return n+(n===1?' pessoa':' pessoas');
   const d=j.need-n;return n+' de '+j.need+(d>0?' · falta '+d:d<0?' · sobra '+(-d):' ✓')}
-function vehOptions(sel){return '<option value="">sem veículo</option>'+S.vehicles.filter(v=>v.n).map(v=>`<option value="${esc(v.n)}"${v.n===sel?' selected':''}>${esc(v.t)} ${esc(v.n)}</option>`).join('')}
+function vehOptions(sel){return '<option value="">sem veículo</option><option value="own"'+(sel===OWN?' selected':'')+'>🚗 carro próprio</option>'+S.vehicles.filter(v=>v.n).map(v=>`<option value="${esc(v.n)}"${v.n===sel?' selected':''}>${esc(v.t)} ${esc(v.n)}</option>`).join('')}
 
 /* ---------- render ---------- */
 function renderJobs(){
@@ -286,6 +288,7 @@ function renderJobs(){
     const crew=j.crew.map((c,ci)=>`<div class="member${dupNames.includes(c.name.trim().toLowerCase())?' dup':''}">
         <span class="nm">${attBadge(j,c)}${esc(c.name)}${isDriverName(c.name)?' <span class="drvmini" title="Motorista">🚗</span>':''}</span>
         <select data-act="veh" data-ci="${ci}" aria-label="Veículo de ${esc(c.name)}" id="vs-${j.id}-${ci}">${vehOptions(c.v)}</select>
+        <span class="mord"><button class="mv" data-act="mup" data-ci="${ci}" aria-label="Subir ${esc(c.name)}"${ci===0?' disabled':''}>↑</button><button class="mv" data-act="mdown" data-ci="${ci}" aria-label="Descer ${esc(c.name)}"${ci===j.crew.length-1?' disabled':''}>↓</button></span>
         <button class="x" data-act="rm" data-ci="${ci}" aria-label="Tirar ${esc(c.name)}">×</button></div>`).join('')||'<div class="empty">Ninguém escalado ainda.</div>';
     let picker='';
     if(openPick===j.id){
@@ -389,6 +392,7 @@ $('jobs').addEventListener('click',e=>{
   if(act==='del'&&!P.apagar)return;
   if(act!=='del')confirmDel=null;
   if(act==='rm')j.crew.splice(+b.dataset.ci,1);
+  else if(act==='mup'||act==='mdown'){const a=+b.dataset.ci,t=act==='mup'?a-1:a+1;if(t<0||t>=j.crew.length)return;[j.crew[a],j.crew[t]]=[j.crew[t],j.crew[a]]}
   else if(act==='pickopen'){openPick=j.id;changed=false}
   else if(act==='pickclose'){openPick=null;changed=false}
   else if(act==='pick'){const n=b.dataset.name;if(!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:''})}
@@ -580,7 +584,7 @@ $('bkDays').onclick=async e=>{
   days.forEach(d=>(d.jobs||[]).forEach((j,i)=>{
     const base=[d.date,i+1,j.company,j.waiting?'(Esperando)':j.address,j.attire,fmt(j.shop),fmt(j.start)];
     if(!(j.crew||[]).length)rows.push([...base,'','']);
-    (j.crew||[]).forEach(c=>rows.push([...base,c.name,c.v||'']));
+    (j.crew||[]).forEach(c=>rows.push([...base,c.name,c.v===OWN?'Carro próprio':(c.v||'')]));
   }));
   await offer('escalas-backup-'+iso(new Date())+'.csv',toCSV(rows),btn);
 };
