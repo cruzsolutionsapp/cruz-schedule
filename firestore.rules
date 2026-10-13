@@ -28,9 +28,14 @@ service cloud.firestore {
     function isMyPhoto(d) {
       return isMember() && myWorker() != '' && d.driver == myWorker();
     }
+    // O trabalhador ligado a este login está com veículo nessa obra, nesse dia? (lista "drivers" na escala do dia)
+    function isDriverOf(date, jobId) {
+      return myWorker() != '' && exists(/databases/$(database)/documents/days/$(date))
+        && myWorker() in get(/databases/$(database)/documents/days/$(date)).data.get('drivers', {}).get(jobId, []);
+    }
     function photoOk(d) {
       return d.by == me() && d.date is string && d.jobId is string && d.driver is string
-        && (can('fotos') || isMyPhoto(d));
+        && (can('fotos') || (isMyPhoto(d) && isDriverOf(d.date, d.jobId)));
     }
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -100,7 +105,8 @@ service cloud.firestore {
       allow read: if isMember();
       allow create, update: if (can('escala')
           || (isMember() && myWorker() != '' && request.resource.data.driver == myWorker()
-              && (resource == null || resource.data.driver == myWorker())))
+              && (resource == null || resource.data.driver == myWorker())
+              && isDriverOf(request.resource.data.date, request.resource.data.jobId)))
         && request.resource.data.date is string && request.resource.data.jobId is string
         && request.resource.data.people is map;
     }

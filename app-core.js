@@ -43,7 +43,9 @@ function flush(path){
     e=>{inflight--;console.error(e);setStatus('err');toast('Não consegui salvar: '+(e&&e.code||'erro'))});
   if(!navigator.onLine)setStatus('offline');
 }
-const saveDay=()=>(P.escala||P.telefones)&&queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{}});
+// drivers: {jobId:[nomes com veículo]} — o banco usa pra conferir que só o motorista daquela obra marca presença/fotos
+const driversMap=()=>{const m={};D.jobs.forEach(j=>{const n=j.crew.filter(c=>c.v).map(c=>c.name);if(n.length)m[j.id]=n});return m};
+const saveDay=()=>(P.escala||P.telefones)&&queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{},drivers:driversMap()});
 const saveRoster=()=>(P.cadastro||P.escala)&&queue(ROSTER,S);
 const savePhones=()=>P.telefones&&queue(PHONES,{phones:PH});
 window.addEventListener('pagehide',flushAll);
@@ -94,6 +96,7 @@ function watchDay(){
     const d=snap.exists?snap.data():null;
     if(dayLoaded&&d&&stable(d)===lastSent[path])return;
     D=normDay(d);dayLoaded=true;rerender();
+    if(P.escala&&d&&D.jobs.length&&stable(d.drivers||{})!==stable(driversMap()))saveDay();   // dias salvos antes de existir a lista de motoristas
   },e=>{console.error(e);setStatus('err')});
 }
 
