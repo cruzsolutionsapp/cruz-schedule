@@ -280,3 +280,6 @@ body.viewer{padding-bottom:24px}
 .drvtag.on{background:var(--hivis);border-color:var(--hivis);color:var(--hivis-ink);font-weight:600}
 @media (max-width:480px){.drvtag span{display:none}}
 .drvmini{font-size:13px}
+
+.vnum{width:64px;flex:none}
+.fixveh{flex:none;font-size:13px;color:var(--muted);white-space:nowrap}
