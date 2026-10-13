@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Schedule Cruz Solutions</title>
+<meta name="theme-color" content="#1B2124">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Schedule">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>html,body{height:100%}body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+</head>
+<body>
+
+<div id="auth" class="authwrap" hidden>
+  <form class="authcard" id="authForm" novalidate>
+    <div class="logo biglogo" role="img" aria-label="Cruz Solutions Services Corporation"></div>
+    <h1 class="authh">Schedule<span>.</span></h1>
+    <h2 id="authTitle">Entrar</h2>
+    <label class="f">E-mail<input type="email" id="email" autocomplete="username" required></label>
+    <label class="f" id="pwRow">Senha<input type="password" id="pw" autocomplete="current-password" minlength="6"></label>
+    <label class="f" id="pw2Row" hidden>Repita a senha<input type="password" id="pw2" autocomplete="new-password"></label>
+    <button class="btn primary big" id="authGo" type="submit">Entrar</button>
+    <p class="authmsg" id="authMsg" role="status"></p>
+    <div class="authlinks">
+      <button type="button" class="linkbtn" id="toSignup">Primeiro acesso</button>
+      <button type="button" class="linkbtn" id="toReset">Esqueci a senha</button>
+      <button type="button" class="linkbtn" id="toLogin" hidden>Voltar pro login</button>
+    </div>
+  </form>
+</div>
+<div id="gate" class="authwrap" hidden><div class="authcard"><div class="logo biglogo" role="img" aria-label="Cruz Solutions"></div><div id="gateBody"></div></div></div>
+<div id="boot" class="authwrap"><div class="authcard"><div class="logo biglogo" role="img" aria-label="Cruz Solutions"></div><p class="hint">Carregando…</p></div></div>
+<div id="app" hidden>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><div class="logo" role="img" aria-label="Cruz Solutions Services Corporation"></div><h1>Schedule<span>.</span></h1></div>
+    <span class="sync" id="sync">Conectando…</span>
+    <div class="datebar">
+      <button class="icon-btn" id="prevDay" aria-label="Dia anterior">‹</button>
+      <input type="date" id="date" aria-label="Data do schedule">
+      <button class="icon-btn" id="nextDay" aria-label="Próximo dia">›</button>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-day" aria-selected="true">Escala do dia</button>
+    <button class="tab" role="tab" id="tab-roster" aria-selected="false">Cadastro</button>
+  </div>
+
+  <section id="view-day">
+    <div class="toolbar">
+      <button class="btn primary" id="addJob">+ Nova obra</button>
+      <button class="btn" id="copyPrev">Copiar último dia</button>
+      <button class="btn" id="bringWeek">Trazer obras All Week</button>
+      <button class="btn danger" id="clearDay">Limpar dia</button>
+    </div>
+    <div class="grid">
+      <div>
+        <div class="alerts" id="alerts"></div>
+        <div class="jobs" id="jobs"></div>
+      </div>
+      <div class="preview-col side">
+        <div class="panel">
+          <h2>Mensagem <small>como vai no WhatsApp</small></h2>
+          <div class="chat"><div class="bubble" id="preview"></div></div>
+          <p class="hint">Use o botão laranja embaixo pra copiar e colar no grupo.</p>
+        </div>
+        <div class="panel">
+          <h2>Avisar equipe <small id="ntCount"></small></h2>
+          <div id="notify"></div>
+        </div>
+        <div class="panel free">
+          <h2>Sem escala <small id="freeCount"></small></h2>
+          <div class="chips" id="free"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-roster" hidden>
+    <div class="roster">
+      <div class="panel">
+        <h2>Trabalhadores <small id="wCount"></small></h2>
+        <div class="list" id="workers"></div>
+        <div class="extra" style="margin-top:10px">
+          <input id="newWorker" placeholder="Nome do trabalhador">
+          <button class="btn" id="addWorker">Adicionar</button>
+        </div>
+        <p class="hint">Gente extra do dia não precisa estar aqui: dá pra digitar o nome direto na obra.</p>
+      </div>
+      <div class="side">
+        <div class="panel">
+          <h2>Acesso</h2>
+          <div class="lrow"><span class="wname" id="who"></span><button class="btn" id="logout">Sair</button></div>
+          <div id="membersBox" hidden>
+            <p class="hint" style="margin-top:10px">Quem pode entrar no app:</p>
+            <div class="list" id="members"></div>
+            <div class="extra" style="margin-top:8px">
+              <input id="newMember" type="email" placeholder="E-mail da pessoa" autocomplete="off">
+              <select id="newRole" aria-label="Tipo de acesso"><option value="member">Usuário</option><option value="admin">Admin</option></select>
+              <button class="btn" id="addMember">Liberar</button>
+            </div>
+            <p class="hint" id="memberMsg">Depois de liberar, a pessoa abre o app, toca em "Primeiro acesso" e cria a própria senha.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Saída do shop</h2>
+          <div class="list">
+            <label class="f">Endereço da empresa<input id="baseAddr"></label>
+          </div>
+          <p class="hint">Na obra, digite os minutos de viagem (use "Conferir no Google Maps"). O tempo fica salvo pra aquele endereço. Horário do shop = start − minutos antes (escolhidos em cada obra) − tempo de viagem, arredondado pra baixo de 5 em 5.</p>
+        </div>
+        <div class="panel">
+          <h2>Veículos</h2>
+          <div class="list" id="vehicles"></div>
+          <button class="btn" id="addVehicle" style="margin-top:8px">+ Veículo</button>
+        </div>
+        <div class="panel">
+          <h2>Backup <small id="lastBackup"></small></h2>
+          <div class="toolbar" style="margin:0">
+            <button class="btn primary" id="bkDays">Baixar escalas</button>
+            <button class="btn" id="bkRoster">Baixar cadastro</button>
+            <button class="btn" id="bkFull">Backup completo (.json)</button>
+            <label class="btn" for="importFile">Importar backup</label>
+            <input type="file" id="importFile" accept=".json,application/json" hidden>
+          </div>
+          <div class="alert warn" id="importInfo" hidden style="margin-top:8px"></div>
+          <p class="hint" id="bkHint">Salva planilhas (.csv) que abrem no Excel ou Google Sheets. "Escalas" traz todos os dias: data, obra, endereço, horários, pessoa e veículo. Guarde uma cópia toda semana. O backup completo (.json) serve pra restaurar tudo no app.</p>
+        </div>
+        <div class="panel">
+          <h2>Companhias</h2>
+          <div class="list" id="companies"></div>
+          <p class="hint">O endereço salvo aqui entra sozinho quando você escolhe a companhia na obra.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="bar"><div class="in">
+  <div class="stats" id="stats"></div>
+  <button class="btn primary" id="copyMsg">Copiar mensagem</button>
+</div></div>
+<div class="toast" id="toast" hidden></div>
+</div>
+<textarea id="fallback" aria-hidden="true" style="position:fixed;left:-9999px;top:0"></textarea>
+
+
+<script src="app-core.js"></script>
+<script type="module" src="auth.js"></script>
+</body>
+</html>
