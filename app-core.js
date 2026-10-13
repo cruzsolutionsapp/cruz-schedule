@@ -287,6 +287,7 @@ function renderJobs(){
   $('jobs').innerHTML=jobs.length?jobs.map((j,i)=>{
     const crew=j.crew.map((c,ci)=>`<div class="member${dupNames.includes(c.name.trim().toLowerCase())?' dup':''}">
         <span class="nm">${attBadge(j,c)}${esc(c.name)}${isDriverName(c.name)?' <span class="drvmini" title="Motorista">🚗</span>':''}</span>
+        ${P.escala?attMini(j,c):''}
         <select data-act="veh" data-ci="${ci}" aria-label="Veículo de ${esc(c.name)}" id="vs-${j.id}-${ci}">${vehOptions(c.v)}</select>
         <span class="mord"><button class="mv" data-act="mup" data-ci="${ci}" aria-label="Subir ${esc(c.name)}"${ci===0?' disabled':''}>↑</button><button class="mv" data-act="mdown" data-ci="${ci}" aria-label="Descer ${esc(c.name)}"${ci===j.crew.length-1?' disabled':''}>↓</button></span>
         <button class="x" data-act="rm" data-ci="${ci}" aria-label="Tirar ${esc(c.name)}">×</button></div>`).join('')||'<div class="empty">Ninguém escalado ainda.</div>';
@@ -632,7 +633,9 @@ function watchAtt(){
 }
 const attOf=(j,name)=>{const a=ATT[j.id];if(!a||!a.people)return '';const k=Object.keys(a.people).find(n=>nkey(n)===nkey(name));return k?a.people[k]:''};
 const absentNames=j=>j.crew.filter(c=>attOf(j,c.name)==='out').map(c=>c.name);
-function attBadge(j,c){const s=attOf(j,c.name);return s==='in'?'<span class="attmark in" title="Veio">✓</span>':s==='out'?'<span class="attmark out" title="Faltou">✗</span>':''}
+function attMini(j,c){const s=attOf(j,c.name);
+  return `<span class="attmini"><button class="attb yes sm${s==='in'?' on':''}" data-att="${j.id}" data-n="${esc(c.name)}" data-s="in" aria-pressed="${s==='in'}" title="Veio">✓</button><button class="attb no sm${s==='out'?' on':''}" data-att="${j.id}" data-n="${esc(c.name)}" data-s="out" aria-pressed="${s==='out'}" title="Faltou">✗</button></span>`}
+function attBadge(j,c){if(P.escala)return '';const s=attOf(j,c.name);return s==='in'?'<span class="attmark in" title="Veio">✓</span>':s==='out'?'<span class="attmark out" title="Faltou">✗</span>':''}
 function attSummary(j){
   const a=ATT[j.id];if(!a||!j.crew.length)return j.crew.length?'<span class="hint">Presença ainda não confirmada pelo motorista.</span>':'';
   const vieram=j.crew.filter(c=>attOf(j,c.name)==='in').length,falt=absentNames(j),sem=j.crew.length-vieram-falt.length;
@@ -654,7 +657,7 @@ function setAtt(j,name,status){
   const now=new Date();
   const driver=P.escala?(prev.driver||jobDrivers(j)[0]||ME||''):ME;
   const docData={date:cur,jobId:j.id,site:jobSite(j),company:j.company||'',driver,by:(ctx&&ctx.email)||'',people,at:now,atMs:now.getTime()};
-  ATT[j.id]=docData;renderPhotos();
+  ATT[j.id]=docData;renderPhotos();if(!typing())renderJobs();
   db.doc('attendance/'+cur+'_'+j.id).set(docData).catch(e=>{console.error(e);toast('Não consegui salvar a presença ('+(e.code||'erro')+')')});
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-att]');if(!b)return;const j=findJob(b.dataset.att);if(j)setAtt(j,b.dataset.n,b.dataset.s)});

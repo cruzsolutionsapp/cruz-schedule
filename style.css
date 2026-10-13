@@ -303,3 +303,6 @@ body.viewer{padding-bottom:24px}
 }
 .job{scroll-margin-top:calc(var(--topH) + 12px)}
 .free .chips{max-height:none}
+
+.attmini{display:inline-flex;gap:3px;flex:none}
+.attb.sm{padding:0;width:30px;height:30px;font-size:15px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
