@@ -95,6 +95,16 @@ service cloud.firestore {
       allow delete: if can('fotos') || (isMember() && resource.data.by == me());
     }
 
+    // Presença: o motorista marca quem veio na obra dele; o escritório (quem edita escala) também pode
+    match /attendance/{id} {
+      allow read: if isMember();
+      allow create, update: if (can('escala')
+          || (isMember() && myWorker() != '' && request.resource.data.driver == myWorker()
+              && (resource == null || resource.data.driver == myWorker())))
+        && request.resource.data.date is string && request.resource.data.jobId is string
+        && request.resource.data.people is map;
+    }
+
     // Escala de cada dia
     match /days/{day} {
       allow read: if isMember();

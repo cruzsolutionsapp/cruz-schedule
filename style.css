@@ -260,3 +260,17 @@ body.viewer{padding-bottom:24px}
 .reqbanner .linkbtn{font-size:14px}
 .reqpanel{border-color:var(--warn)}
 .mcard.req{border-color:var(--hivis)}
+
+/* ---- presença ---- */
+.att{display:flex;flex-direction:column;gap:6px}
+.phsub{font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.attrow{display:flex;align-items:center;gap:6px}
+.attname{flex:1;min-width:0;font-weight:500;overflow-wrap:anywhere}
+.attb{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 12px;font-size:14px;cursor:pointer}
+.attb.yes.on{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.attb.no.on{background:var(--bad);border-color:var(--bad);color:var(--surface)}
+.attmark{display:inline-block;width:18px;font-weight:700}
+.attmark.in{color:var(--ok)}
+.attmark.out{color:var(--bad)}
+.attsum{font-size:13px;color:var(--ink)}
+.attsum .attout{color:var(--bad);font-weight:600}

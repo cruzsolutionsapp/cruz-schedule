@@ -86,6 +86,7 @@ function watchDay(){
   const path=dayPath(cur);
   renderJobs();
   watchPhotos();
+  watchAtt();
   unsubDay=db.doc(path).onSnapshot(snap=>{
     if(path!==dayPath(cur))return;
     if(pend[path])return;
@@ -127,6 +128,7 @@ function analyze(){
   D.jobs.forEach(j=>{
     const nm=j.company||'Obra sem nome';
     if(j.need&&j.crew.length<j.need){const f=j.need-j.crew.length;out.push(['bad',`${nm}: falta${f>1?'m':''} ${f} pessoa${f>1?'s':''} (${j.crew.length} de ${j.need})`])}
+    const faltou=absentNames(j);if(faltou.length)out.push(['bad',`${nm}: ${faltou.join(', ')} ${faltou.length>1?'faltaram':'faltou'} (confirmado pelo motorista)`]);
     if(j.crew.length&&!j.crew.some(c=>c.v))out.push(['warn',`${nm}: ninguém com veículo`]);
     if(!j.crew.length&&!j.need)out.push(['warn',`${nm}: sem equipe`]);
     if(!j.waiting&&!j.address.trim())out.push(['warn',`${nm}: falta endereço (ou marque "Esperando")`]);
@@ -272,7 +274,7 @@ function renderJobs(){
   const jobs=D.jobs;
   $('jobs').innerHTML=jobs.length?jobs.map((j,i)=>{
     const crew=j.crew.map((c,ci)=>`<div class="member${dupNames.includes(c.name.trim().toLowerCase())?' dup':''}">
-        <span class="nm">${esc(c.name)}</span>
+        <span class="nm">${attBadge(j,c)}${esc(c.name)}</span>
         <select data-act="veh" data-ci="${ci}" aria-label="Veículo de ${esc(c.name)}" id="vs-${j.id}-${ci}">${vehOptions(c.v)}</select>
         <button class="x" data-act="rm" data-ci="${ci}" aria-label="Tirar ${esc(c.name)}">×</button></div>`).join('')||'<div class="empty">Ninguém escalado ainda.</div>';
     let picker='';
@@ -314,6 +316,7 @@ function renderJobs(){
           <h3><span>Equipe</span><span class="need ${needCls(j)}" id="nd-${j.id}">${needText(j)}</span></h3>
           <label class="needrow">Preciso de <input type="number" min="0" max="99" inputmode="numeric" data-f="need" value="${j.need||''}" placeholder="–" id="nq-${j.id}"> pessoas</label>
           ${crew}
+          <div class="attsum" id="as-${j.id}">${attSummary(j)}</div>
           ${picker||`<button class="btn" data-act="pickopen">+ Adicionar pessoas</button>`}
         </div>
         ${P.fotos?`<button class="btn phcount" data-act="photos">📷 Fotos da obra <b id="pc-${j.id}">${photoCount(j)}</b></button>`:''}
@@ -592,6 +595,47 @@ $('importInfo').addEventListener('click',async e=>{
   }catch(err){console.error(err);toast('Falhou a importação: '+(err&&err.code||'erro'))}
 });
 
+/* ---------- presença: o motorista confirma quem veio ----------
+   attendance/{data_jobId}: {date, jobId, site, company, driver, by, people{nome:'in'|'out'}, at, atMs} */
+let ATT={},attUnsub=null;
+function watchAtt(){
+  if(attUnsub){attUnsub();attUnsub=null}
+  ATT={};
+  attUnsub=db.collection('attendance').where('date','==',cur).onSnapshot(s=>{
+    ATT={};s.docs.forEach(d=>{const x=d.data();if(x&&x.jobId)ATT[x.jobId]=x});
+    renderPhotos();
+    if(dayLoaded){if(typing())deferred=true;else renderJobs()}
+  },e=>console.error(e));
+}
+const attOf=(j,name)=>{const a=ATT[j.id];if(!a||!a.people)return '';const k=Object.keys(a.people).find(n=>nkey(n)===nkey(name));return k?a.people[k]:''};
+const absentNames=j=>j.crew.filter(c=>attOf(j,c.name)==='out').map(c=>c.name);
+function attBadge(j,c){const s=attOf(j,c.name);return s==='in'?'<span class="attmark in" title="Veio">✓</span>':s==='out'?'<span class="attmark out" title="Faltou">✗</span>':''}
+function attSummary(j){
+  const a=ATT[j.id];if(!a||!j.crew.length)return j.crew.length?'<span class="hint">Presença ainda não confirmada pelo motorista.</span>':'';
+  const vieram=j.crew.filter(c=>attOf(j,c.name)==='in').length,falt=absentNames(j),sem=j.crew.length-vieram-falt.length;
+  const t=a.atMs?new Date(a.atMs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';
+  return `<b>Presença:</b> ${vieram} de ${j.crew.length} vieram${falt.length?` · <span class="attout">faltou: ${esc(falt.join(', '))}</span>`:''}${sem?` · ${sem} sem marcar`:''}${t?` <span class="hint">(${esc(a.driver||'')} ${t})</span>`:''}`;
+}
+function attBlock(j){
+  const a=ATT[j.id];const marked=j.crew.filter(c=>attOf(j,c.name)).length;
+  return `<div class="att"><h4 class="phsub">Quem veio hoje?</h4>
+    ${j.crew.map(c=>{const s=attOf(j,c.name);return `<div class="attrow"><span class="attname">${esc(c.name)}</span>
+      <button class="attb yes${s==='in'?' on':''}" data-att="${j.id}" data-n="${esc(c.name)}" data-s="in" aria-pressed="${s==='in'}">✓ Veio</button>
+      <button class="attb no${s==='out'?' on':''}" data-att="${j.id}" data-n="${esc(c.name)}" data-s="out" aria-pressed="${s==='out'}">✗ Faltou</button></div>`}).join('')}
+    <small class="hint">${marked} de ${j.crew.length} marcados${a&&a.atMs?' · salvo às '+new Date(a.atMs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):''}</small></div>`;
+}
+function setAtt(j,name,status){
+  const prev=ATT[j.id]||{};const people=Object.assign({},prev.people||{});
+  const k=Object.keys(people).find(n=>nkey(n)===nkey(name))||name;
+  if(people[k]===status)delete people[k];else people[k]=status;
+  const now=new Date();
+  const driver=P.escala?(prev.driver||(j.crew.find(c=>c.v)||{}).name||ME||''):ME;
+  const docData={date:cur,jobId:j.id,site:jobSite(j),company:j.company||'',driver,by:(ctx&&ctx.email)||'',people,at:now,atMs:now.getTime()};
+  ATT[j.id]=docData;renderPhotos();
+  db.doc('attendance/'+cur+'_'+j.id).set(docData).catch(e=>{console.error(e);toast('Não consegui salvar a presença ('+(e.code||'erro')+')')});
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-att]');if(!b)return;const j=findJob(b.dataset.att);if(j)setAtt(j,b.dataset.n,b.dataset.s)});
+
 /* ---------- fotos da obra (versão de teste: fotos guardadas no banco) ----------
    photos/{id}: só os dados (leve, pra listar)  ·  photoThumb/{id}: miniatura  ·  photoFull/{id}: foto grande
    Agrupadas por obra = companhia + endereço (site), juntando todos os dias. */
@@ -668,6 +712,8 @@ function renderPhotos(){
   const list=PHOTOS.filter(p=>p.driver===ME);needThumbs(list,renderPhotos);
   $('photosBody').innerHTML=jobs.map(j=>{const mine=list.filter(p=>p.site?p.site===jobSite(j):p.jobId===j.id);
     return `<div class="phjob"><div class="phhead"><b>${esc(j.company||'Obra')}</b><small>${esc(j.waiting?'Endereço a confirmar':j.address)}</small></div>
+    ${attBlock(j)}
+    <h4 class="phsub">Fotos</h4>
     ${camBtns(j.id)}
     ${mine.length?`<div class="phgrid">${mine.map(p=>thumbBtn(p,hhmm(p.atMs))).join('')}</div>`:'<span class="empty">Nenhuma foto hoje.</span>'}
     <button class="linkbtn" data-site="${esc(jobSite(j))}" data-title="${esc((j.company||'Obra')+(j.waiting||!j.address?'':' · '+j.address))}">Ver todas as fotos desta obra →</button></div>`}).join('')
