@@ -142,7 +142,79 @@ async function route(u) {
   started = window.startApp(dbw, { email: me, isAdmin, perms, worker: md.worker || '', totem: totemOnly });
   setupMembers(isAdmin, me);
 }
-onAuthStateChanged(auth, route);
+/* ----- link de demonstração (#demo): dados inventados na memória, sem login, nada é salvo ----- */
+const DEMO = location.hash === '#demo';
+if (DEMO) startDemo(); else onAuthStateChanged(auth, route);
+
+function memDb(seed) {
+  const store = new Map(Object.entries(seed).map(([k, v]) => [k, JSON.parse(JSON.stringify(v))]));
+  const subs = new Set();
+  const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+  const snapDoc = p => ({ id: p.split('/').pop(), exists: store.has(p), data: () => clone(store.get(p)), metadata: { hasPendingWrites: false, fromCache: false } });
+  const notify = () => subs.forEach(f => setTimeout(f, 0));
+  const num = x => x instanceof Date ? x.getTime() : (typeof x === 'string' && /^\d{4}-\d\d-\d\dT/.test(x) ? Date.parse(x) : x);
+  const cmp = (a, op, b) => { a = num(a); b = num(b); return op === '==' ? a === b : op === '!=' ? a !== b : op === '<' ? a < b : op === '<=' ? a <= b : op === '>' ? a > b : op === '>=' ? a >= b : true; };
+  const coll = (p, f = [], o = null, l = 0) => {
+    const run = () => {
+      const depth = p.split('/').length + 1;
+      let docs = [...store.keys()].filter(k => k.startsWith(p + '/') && k.split('/').length === depth).map(snapDoc);
+      docs = docs.filter(d => f.every(([k, op, v]) => cmp((d.data() || {})[k], op, v)));
+      if (o) docs.sort((a, b) => { const x = num(a.data()[o[0]]), y = num(b.data()[o[0]]); return (x < y ? -1 : x > y ? 1 : 0) * (o[1] === 'desc' ? -1 : 1); });
+      if (l) docs = docs.slice(0, l);
+      return { docs, size: docs.length };
+    };
+    return { where: (k, op, v) => coll(p, [...f, [k, op, v]], o, l), orderBy: (k, d = 'asc') => coll(p, f, [k, d], l), limit: n => coll(p, f, o, n),
+      get: () => Promise.resolve(run()),
+      onSnapshot: n => { const fire = () => n(run()); subs.add(fire); setTimeout(fire, 0); return () => subs.delete(fire); } };
+  };
+  return {
+    doc: p => ({ set: d => { store.set(p, clone(d)); notify(); return Promise.resolve(); }, get: () => Promise.resolve(snapDoc(p)),
+      delete: () => { store.delete(p); notify(); return Promise.resolve(); },
+      onSnapshot: n => { const fire = () => n(snapDoc(p)); subs.add(fire); setTimeout(fire, 0); return () => subs.delete(fire); } }),
+    collection: p => coll(p)
+  };
+}
+function demoSeed() {
+  const pad = n => String(n).padStart(2, '0'), iso = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  const today = iso(new Date()), y = new Date(); y.setDate(y.getDate() - 1); const yest = iso(y);
+  const A = 'Calca👖|Bota 🥾';
+  const job = (id, company, address, shop, start, travel, crew, extra) => Object.assign({ id, company, address, waiting: false, office: false, attire: A, shop, start, early: 30, travel, autoShop: true, tk: '', need: crew.length, note: '', allWeek: false, crew: crew.map(c => Array.isArray(c) ? { name: c[0], v: c[1] } : { name: c, v: '' }) }, extra || {});
+  const jobs = [
+    job('d1', 'ABC Restoration', '45 Elm Street, Framingham, MA', '06:15', '07:15', 30, [['Carlos Lima', '51'], 'João Pereira', 'Marcos Souza', 'Rafael Alves', 'Diego Santos'], { allWeek: true, note: 'Gate Code 1-2-3-4' }),
+    job('d2', 'Blue Line Builders', '210 Main Street, Worcester, MA', '06:00', '07:00', 30, [['André Costa', '52'], 'Felipe Rocha', 'Lucas Martins', ['Bruno Dias', 'own']], { need: 5 }),
+    job('d3', 'Coastal Demo Co', '', '05:30', '07:30', null, [['Paulo Ribeiro', '54'], 'Thiago Gomes', 'Vitor Melo'], { waiting: true, autoShop: false, travel: null })
+  ];
+  const drivers = {}; jobs.forEach(j => { const n = j.crew.filter(c => c.v && c.v !== 'own').map(c => c.name); if (n.length) drivers[j.id] = n; });
+  const t = h => new Date(today + 'T' + h + ':00').getTime();
+  return {
+    'config/roster': {
+      workers: ['André Costa', 'Bruno Dias', 'Carlos Lima', 'Diego Santos', 'Eduardo Nunes', 'Felipe Rocha', 'Gabriel Teixeira', 'João Pereira', 'Lucas Martins', 'Marcos Souza', 'Paulo Ribeiro', 'Rafael Alves', 'Thiago Gomes', 'Vitor Melo'],
+      vehicles: [{ n: '51', t: '🛻' }, { n: '52', t: '🛻' }, { n: '54', t: '🚐' }],
+      companies: { 'ABC Restoration': ['45 Elm Street, Framingham, MA'], 'Blue Line Builders': ['210 Main Street, Worcester, MA'], 'Coastal Demo Co': [] },
+      offices: { 'Coastal Demo Co': '12 Harbor Road, Quincy, MA' },
+      base: 'Shop da empresa, Holliston, MA', buffer: 30,
+      travel: { '45 elm street framingham ma': 30, '210 main street worcester ma': 30 },
+      drivers: ['Carlos Lima', 'André Costa', 'Paulo Ribeiro']
+    },
+    'config/phones': { phones: { 'Carlos Lima': '(508) 555-0101', 'João Pereira': '(508) 555-0102', 'André Costa': '(508) 555-0103', 'Paulo Ribeiro': '(508) 555-0104' } },
+    ['days/' + today]: { date: today, jobs, sent: {}, drivers },
+    ['days/' + yest]: { date: yest, jobs: [jobs[0]], sent: {}, drivers: { d1: ['Carlos Lima'] } },
+    ['attendance/' + today + '_d1']: { date: today, jobId: 'd1', company: 'ABC Restoration', driver: 'Carlos Lima', by: 'demo', people: { 'Carlos Lima': 'in', 'João Pereira': 'in', 'Marcos Souza': 'in', 'Rafael Alves': 'out' }, times: { 'Carlos Lima': t('06:02'), 'João Pereira': t('06:09'), 'Marcos Souza': t('06:21') }, atMs: t('06:25') }
+  };
+}
+function startDemo() {
+  show('app');
+  document.body.classList.add('demo');
+  const bar = document.createElement('div'); bar.className = 'demobar';
+  bar.innerHTML = '👀 <b>Modo demonstração</b>: dados de exemplo, nada é salvo. Pode mexer à vontade. <button class="linkbtn" id="demoReset">Recomeçar</button>';
+  document.querySelector('#app .wrap').prepend(bar);
+  $('demoReset').onclick = () => location.reload();
+  $('who').textContent = 'Demonstração (sem login)';
+  $('logout').textContent = 'Recomeçar'; $('logout').onclick = () => location.reload();
+  $('logout2').onclick = () => location.reload();
+  $('tab-access').hidden = true;
+  started = window.startApp(memDb(demoSeed()), { email: 'demo@exemplo', isAdmin: true, perms: { escala: true, apagar: true, cadastro: true, telefones: true, backup: true, fotos: true }, worker: '' });
+}
 
 /* ----- gerenciar quem tem acesso (só administrador) ----- */
 const PERMS = [['escala', 'Editar escala'], ['apagar', 'Apagar obras'], ['cadastro', 'Editar cadastro'], ['telefones', 'Telefones e avisar equipe'], ['backup', 'Baixar backup'], ['fotos', 'Ver todas as fotos'], ['totem', '🖥️ É o totem do shop (só check-in)']];
