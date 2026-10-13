@@ -283,8 +283,3 @@ body.viewer{padding-bottom:24px}
 
 .vnum{width:64px;flex:none}
 .fixveh{flex:none;font-size:13px;color:var(--muted);white-space:nowrap}
-
-.carsel{flex:none;max-width:170px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);color:var(--muted);font-size:14px}
-.carsel.on{border-color:var(--hivis);color:var(--ink);font-weight:600}
-.vdrv{font-size:14px;min-width:0;overflow-wrap:anywhere}
-@media (max-width:480px){.lrow .wphone{width:118px}.carsel{max-width:120px}}
