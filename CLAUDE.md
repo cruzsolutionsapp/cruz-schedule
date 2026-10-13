@@ -16,7 +16,7 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - `config/phones`: `{phones{nome:tel}}` (separado pra só quem tem a permissão `telefones` ler)
 - `days/YYYY-MM-DD`: `{date, jobs[{id,company,address,waiting,attire,shop,start,early,travel,autoShop,tk,need,note,allWeek,crew[{name,v}]}], sent{nome:iso}}`
 - `members/<email>`: `{email, role:'admin'|'member', worker:'Nome do trabalhador', perms{escala,apagar,cadastro,telefones,backup,fotos}}` (perms ausente = tudo liberado; admin = tudo + aba Acesso) · `meta/owner`: primeiro administrador.
-- `photos/{id}` (miniatura + dados) e `photoFull/{id}` (foto ~1600px em base64): `{date, jobId, company, address, driver, by, at, atMs, expireAt, w, h, thumb|data}`. Versão de teste sem Storage; `expireAt` (1 ano) é usado pela política TTL do Firestore. Motorista = quem tem veículo na equipe e está ligado a um login via `worker`.
+- `photos/{id}` (miniatura + dados) e `photoFull/{id}` (foto ~1600px em base64): `{date, jobId, company, address, driver, by, at, atMs, expireAt, w, h, thumb|data}`. Versão de teste sem Storage; `expireAt` (1 ano): o app de um admin apaga as vencidas ao abrir (`cleanupOldPhotos`), sem depender de TTL no console. Motorista = quem tem veículo na equipe e está ligado a um login via `worker`.
 
 ## Formato da mensagem do WhatsApp (não mudar sem pedir)
 ```

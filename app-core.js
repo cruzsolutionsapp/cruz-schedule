@@ -681,6 +681,17 @@ $('pvDel').onclick=async()=>{if(!viewing)return;const b=$('pvDel');
   try{await db.doc('photos/'+id).delete();await db.doc('photoFull/'+id).delete();toast('Foto apagada')}catch(e){toast('Não consegui apagar ('+(e.code||'erro')+')')}};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(viewing)closeViewer();else if(galleryJob)closeGallery()}});
 
+// Limpeza automática: quem tem "Ver todas as fotos" apaga, ao abrir o app, as fotos com mais de 1 ano
+async function cleanupOldPhotos(){
+  if(!P.fotos||!isAdmin)return;
+  try{
+    const old=await db.collection('photos').where('expireAt','<',new Date()).limit(100).get();
+    for(const d of old.docs){await db.doc('photos/'+d.id).delete();await db.doc('photoFull/'+d.id).delete()}
+    if(old.size)console.log('Fotos antigas apagadas:',old.size);
+  }catch(e){console.error(e)}
+}
+setTimeout(cleanupOldPhotos,8000);
+
 /* ---------- início ---------- */
 if(viewer)tab('day');
 $('date').value=cur;
