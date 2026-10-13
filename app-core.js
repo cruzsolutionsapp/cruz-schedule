@@ -159,6 +159,20 @@ function analyze(){
 }
 function assignedSet(){const s=new Set();D.jobs.forEach(j=>j.crew.forEach(c=>s.add(c.name.trim().toLowerCase())));return s}
 const findJob=id=>D.jobs.find(j=>j.id===id);
+/* ---------- arrumação automática do que é digitado ---------- */
+const tidy=s=>String(s||'').replace(/\s+/g,' ').trim();
+const cap=w=>w.charAt(0).toLocaleUpperCase('pt-BR')+w.slice(1).toLocaleLowerCase('pt-BR');
+const isLow=w=>w===w.toLocaleLowerCase('pt-BR')&&/\p{L}/u.test(w);
+const isUp=w=>w===w.toLocaleUpperCase('pt-BR')&&/\p{L}/u.test(w);
+// Nomes: "pierre RAMOS" -> "Pierre Ramos" (mantém nomes já misturados, tipo McDonald)
+const fmtName=s=>tidy(s).split(' ').map(w=>w.split('-').map(p=>(isLow(p)||isUp(p))?cap(p):p).join('-')).join(' ');
+// Companhias: só arruma palavras todas minúsculas; siglas (JBD, ABC) ficam
+const fmtCompany=s=>tidy(s).split(' ').map(w=>isLow(w)?cap(w):w).join(' ');
+// Endereços: palavras minúsculas ganham maiúscula (menos in/of/at/and), estado em maiúsculo
+const SMALL=new Set(['in','of','at','and','on','de','da','do']);
+const fmtAddress=s=>{let w=tidy(s).split(' ').map((x,i)=>isLow(x)&&!(i>0&&SMALL.has(x))?cap(x):x).join(' ');
+  return w.replace(/\b(ma|nh|ri|ct|ny|me|vt|nj|pa|fl)\b(?=[\s,.]*(\d{5}(-\d{4})?)?\s*$)/i,m=>m.toUpperCase())};
+
 /* ---------- viagem / horário do shop ---------- */
 const DEFAULT_BASE='599 Concord St, Holliston, MA 01746';
 let sampler=null;
@@ -399,6 +413,9 @@ $('jobs').addEventListener('change',e=>{
   const card=e.target.closest('.job');if(!card)return;const j=findJob(card.dataset.id);if(!j)return;
   if(e.target.dataset.act==='veh'){j.crew[+e.target.dataset.ci].v=e.target.value;saveDay();e.target.blur();renderJobs();return}
   const f=e.target.dataset.f;
+  if(f==='company'||f==='address'||f==='note'){
+    const fx=f==='company'?fmtCompany:f==='address'?fmtAddress:tidy;const nv=fx(j[f]);
+    if(nv!==j[f]){j[f]=nv;e.target.value=nv;saveDay();refresh(false)}}
   if(f==='company'||f==='address')rememberAddr(j);
   if(f==='office'&&j.office&&j.address.trim())rememberAddr(j);
   if(f==='address'||f==='company'||f==='waiting'||f==='office')lookupTravel(j);
@@ -417,7 +434,7 @@ $('jobs').addEventListener('click',e=>{
   else if(act==='pickopen'){openPick=j.id;changed=false}
   else if(act==='pickclose'){openPick=null;changed=false}
   else if(act==='pick'){const n=b.dataset.name;if(!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:''})}
-  else if(act==='extra'){const inp=$('extra-'+j.id);const n=inp.value.trim();if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:''})}
+  else if(act==='extra'){const inp=$('extra-'+j.id);const n=fmtName(inp.value);if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:''})}
   else if(act==='up'&&i>0){jobs.splice(i,1);jobs.splice(i-1,0,j)}
   else if(act==='down'&&i<jobs.length-1){jobs.splice(i,1);jobs.splice(i+1,0,j)}
   else if(act==='auto'){j.autoShop=true;recompute(j)}
@@ -489,7 +506,7 @@ function tab(which){['day','roster','access','photos'].forEach(t=>{const b=$('ta
 $('tab-day').onclick=()=>{tab('day');renderJobs()};$('tab-roster').onclick=()=>{tab('roster');renderRoster()};if($('tab-access'))$('tab-access').onclick=()=>tab('access');
 
 /* ---------- cadastro ---------- */
-$('baseAddr').addEventListener('change',e=>{const v=e.target.value.trim();if(v&&v!==S.base){S.base=v;S.travel={};saveRoster();toast('Endereço da empresa salvo. Tempos serão recalculados nas próximas obras')}});
+$('baseAddr').addEventListener('change',e=>{const v=fmtAddress(e.target.value);e.target.value=v;if(v&&v!==S.base){S.base=v;S.travel={};saveRoster();toast('Endereço da empresa salvo. Tempos serão recalculados nas próximas obras')}});
 function renderRoster(){
   if(document.activeElement!==$('baseAddr'))$('baseAddr').value=S.base;
   $('wCount').textContent=S.workers.length+' fixos';
@@ -512,7 +529,7 @@ function renderRoster(){
   if(!P.cadastro){document.querySelectorAll('#view-roster .wname,#workers [data-wi],#vehicles input,#vehicles select,#vehicles button,#companies input,#companies button,#workers [data-drv],#baseAddr,#newWorker,#addWorker,#addVehicle').forEach(el=>el.disabled=true)}
 }
 $('workers').addEventListener('change',e=>{const i=e.target.dataset.wn;if(i==null)return;
-  const old=S.workers[+i];const nv=e.target.value.trim().replace(/\s+/g,' ');
+  const old=S.workers[+i];const nv=fmtName(e.target.value);
   if(!nv||nv===old){e.target.value=old;return}
   if(S.workers.some((w,k)=>k!==+i&&nkey(w)===nkey(nv))){toast('Já existe alguém com esse nome');e.target.value=old;return}
   S.workers[+i]=nv;
@@ -535,14 +552,14 @@ $('workers').onclick=e=>{
     S.drivers=on?S.drivers.filter(x=>nkey(x)!==nkey(w)):[...S.drivers,w];saveRoster();renderRoster();
     if(P.escala&&D.jobs.length)saveDay();renderJobs();toast(on?w+' não é mais motorista':w+' marcado como motorista');return}
   const b=e.target.closest('[data-wi]');if(b){const w=S.workers[+b.dataset.wi];S.workers.splice(+b.dataset.wi,1);S.drivers=S.drivers.filter(x=>nkey(x)!==nkey(w));saveRoster();renderRoster();refresh(false)}};
-function addWorker(){const n=$('newWorker').value.trim();if(n&&!S.workers.some(w=>w.toLowerCase()===n.toLowerCase())){S.workers.push(n);S.workers.sort((a,b)=>a.localeCompare(b,'pt'));saveRoster();renderRoster();refresh(false)}$('newWorker').value='';$('newWorker').focus()}
+function addWorker(){const n=fmtName($('newWorker').value);if(n&&!S.workers.some(w=>w.toLowerCase()===n.toLowerCase())){S.workers.push(n);S.workers.sort((a,b)=>a.localeCompare(b,'pt'));saveRoster();renderRoster();refresh(false)}$('newWorker').value='';$('newWorker').focus()}
 $('bulkAdd').onclick=()=>{
   if(!P.cadastro)return;
   const lines=$('bulkText').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   let added=0,phones=0,dup=0;
   lines.forEach(l=>{
     const m=l.match(/^(.*?)[\s,;:\-–]*((?:\+?1[\s.\-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})\s*$/);
-    const name=(m?m[1]:l).replace(/[,;:\-–]+$/,'').replace(/\s+/g,' ').trim();
+    const name=fmtName((m?m[1]:l).replace(/[,;:\-–]+$/,''));
     const ph=m?m[2].trim():'';
     if(!name)return;
     const ex=S.workers.find(w=>nkey(w)===nkey(name));
@@ -559,9 +576,10 @@ $('addWorker').onclick=addWorker;$('newWorker').onkeydown=e=>{if(e.key==='Enter'
 $('vehicles').addEventListener('input',e=>{const t=e.target;if(t.dataset.vi!=null){S.vehicles[+t.dataset.vi][t.dataset.k]=t.value.trim();saveRoster()}});
 $('vehicles').onclick=e=>{const b=e.target.closest('[data-vdel]');if(b){S.vehicles.splice(+b.dataset.vdel,1);saveRoster();renderRoster()}};
 $('addVehicle').onclick=()=>{S.vehicles.push({n:'',t:'🛻'});saveRoster();renderRoster();const el=$('veh-'+(S.vehicles.length-1));if(el)el.focus()};
+$('companies').addEventListener('change',e=>{const c=e.target.dataset.off;if(c==null)return;const v=fmtAddress(e.target.value);e.target.value=v;if(v)S.offices[c]=v;else delete S.offices[c];saveRoster()});
 $('companies').addEventListener('input',e=>{const c=e.target.dataset.off;if(c==null)return;const v=e.target.value.trim();if(v)S.offices[c]=v;else delete S.offices[c];saveRoster()});
 $('companies').oninput=e=>{const c=e.target.dataset.co;if(c!=null&&S.companies[c]){S.companies[c][+e.target.dataset.ai]=e.target.value;saveRoster()}};
-$('companies').addEventListener('change',e=>{const c=e.target.dataset.co;if(c!=null&&S.companies[c]){S.companies[c]=S.companies[c].map(a=>a.trim()).filter(Boolean);saveRoster();renderRoster()}});
+$('companies').addEventListener('change',e=>{const c=e.target.dataset.co;if(c!=null&&S.companies[c]){S.companies[c]=S.companies[c].map(fmtAddress).filter(Boolean);saveRoster();renderRoster()}});
 $('companies').onclick=e=>{
   const d=e.target.closest('[data-cdel]'),ad=e.target.closest('[data-adel]'),add=e.target.closest('[data-cadd]');
   if(d){delete S.companies[d.dataset.cdel];saveRoster();renderRoster()}
