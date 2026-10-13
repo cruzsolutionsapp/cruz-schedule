@@ -149,6 +149,7 @@
         <div class="panel">
           <h2>Acesso</h2>
           <div class="lrow"><span class="wname" id="who"></span><button class="btn" id="logout">Sair</button></div>
+          <button class="btn" id="openTotem" hidden style="margin-top:8px">🖥️ Abrir modo Totem (check-in)</button>
         </div>
         <div class="panel">
           <h2>Saída do shop</h2>
@@ -201,6 +202,17 @@
     <div class="pvbar"><span id="pvInfo"></span>
       <button class="btn" id="pvSave">Baixar</button><button class="btn danger" id="pvDel">Apagar</button><button class="btn" id="pvClose">Fechar</button></div>
   </div>
+</div>
+<div class="totem" id="totem" hidden>
+  <div class="ttop">
+    <div class="logo tlogo" role="img" aria-label="Cruz Solutions"></div>
+    <div class="tclock"><b id="tClock"></b><span id="tDate"></span></div>
+    <button class="btn texit" id="tExit">Sair do totem</button>
+  </div>
+  <p class="thelp">Toque no seu nome pra fazer o check-in</p>
+  <input id="tSearch" class="tsearch" type="search" placeholder="Procurar meu nome" aria-label="Procurar nome" autocomplete="off">
+  <div class="tbody" id="tBody"></div>
+  <div class="tmodal" id="tModal" hidden><div class="tcard" id="tModalBody" role="dialog" aria-modal="true"></div></div>
 </div>
 <div class="toast" id="toast" hidden></div>
 </div>

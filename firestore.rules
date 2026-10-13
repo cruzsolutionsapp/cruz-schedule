@@ -37,6 +37,10 @@ service cloud.firestore {
       return d.by == me() && d.date is string && d.jobId is string && d.driver is string
         && (can('fotos') || (isMyPhoto(d) && isDriverOf(d.date, d.jobId)));
     }
+    // Login do totem do shop: só faz check-in (permissão 'totem' tem que estar marcada de propósito)
+    function isTotem() {
+      return isMember() && member().get('perms', {}).get('totem', false) == true;
+    }
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
@@ -106,7 +110,9 @@ service cloud.firestore {
       allow create, update: if (can('escala')
           || (isMember() && myWorker() != '' && request.resource.data.driver == myWorker()
               && (resource == null || resource.data.driver == myWorker())
-              && isDriverOf(request.resource.data.date, request.resource.data.jobId)))
+              && isDriverOf(request.resource.data.date, request.resource.data.jobId))
+          || (isTotem() && (resource == null
+              || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['people', 'times', 'by', 'at', 'atMs', 'driver']))))
         && request.resource.data.date is string && request.resource.data.jobId is string
         && request.resource.data.people is map;
     }

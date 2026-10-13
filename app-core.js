@@ -102,7 +102,7 @@ function watchDay(){
     if(dayLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
     const d=snap.exists?snap.data():null;
     if(dayLoaded&&d&&stable(d)===lastSent[path])return;
-    D=normDay(d);dayLoaded=true;rerender();
+    D=normDay(d);dayLoaded=true;rerender();renderTotem();
     lastDrivers=d&&d.drivers||{};
     if(P.escala&&d&&D.jobs.length&&stable(d.drivers||{})!==stable(driversMap()))saveDay();   // dias salvos antes de existir a lista de motoristas
   },e=>{console.error(e);setStatus('err')});
@@ -141,6 +141,7 @@ function analyze(){
   D.jobs.forEach(j=>{
     const nm=j.company||'Obra sem nome';
     if(j.need&&j.crew.length<j.need){const f=j.need-j.crew.length;out.push(['bad',`${nm}: falta${f>1?'m':''} ${f} pessoa${f>1?'s':''} (${j.crew.length} de ${j.need})`])}
+    const late=j.crew.filter(c=>isLate(j,c.name)).map(c=>c.name);if(late.length)out.push(['warn',`${nm}: chegou atrasado no shop: ${late.join(', ')}`]);
     const faltou=absentNames(j);if(faltou.length)out.push(['bad',`${nm}: ${faltou.join(', ')} ${faltou.length>1?'faltaram':'faltou'} (confirmado pelo motorista)`]);
     if(j.crew.length&&!j.crew.some(c=>isCompanyVeh(c.v)))out.push(['warn',`${nm}: ninguém com veículo`]);
     if(!j.crew.length&&!j.need)out.push(['warn',`${nm}: sem equipe`]);
@@ -645,15 +646,20 @@ function watchAtt(){
   ATT={};
   attUnsub=db.collection('attendance').where('date','==',cur).onSnapshot(s=>{
     ATT={};s.docs.forEach(d=>{const x=d.data();if(x&&x.jobId)ATT[x.jobId]=x});
-    renderPhotos();
+    renderPhotos();renderTotem();
     if(dayLoaded){if(typing())deferred=true;else renderJobs()}
   },e=>console.error(e));
 }
 const attOf=(j,name)=>{const a=ATT[j.id];if(!a||!a.people)return '';const k=Object.keys(a.people).find(n=>nkey(n)===nkey(name));return k?a.people[k]:''};
 const absentNames=j=>j.crew.filter(c=>attOf(j,c.name)==='out').map(c=>c.name);
+// hora do check-in (totem): times{nome: ms}
+const timeOf=(j,name)=>{const a=ATT[j.id];if(!a||!a.times)return 0;const k=Object.keys(a.times).find(n=>nkey(n)===nkey(name));return k?a.times[k]:0};
+const shopMs=j=>j.shop?new Date(cur+'T'+j.shop+':00').getTime():0;
+const isLate=(j,name)=>{const t=timeOf(j,name),s=shopMs(j);return !!(t&&s&&t>s+59999)};
+const timeTag=(j,c)=>{const t=timeOf(j,c.name);if(!t)return '';return `<span class="ttime${isLate(j,c.name)?' late':''}" title="Check-in no totem">${esc(new Date(t).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ',''))}</span>`};
 function attMini(j,c){const s=attOf(j,c.name);
-  return `<span class="attmini"><button class="attb yes sm${s==='in'?' on':''}" data-att="${j.id}" data-n="${esc(c.name)}" data-s="in" aria-pressed="${s==='in'}" title="Veio">✓</button><button class="attb no sm${s==='out'?' on':''}" data-att="${j.id}" data-n="${esc(c.name)}" data-s="out" aria-pressed="${s==='out'}" title="Faltou">✗</button></span>`}
-function attBadge(j,c){if(P.escala)return '';const s=attOf(j,c.name);return s==='in'?'<span class="attmark in" title="Veio">✓</span>':s==='out'?'<span class="attmark out" title="Faltou">✗</span>':''}
+  return `${timeTag(j,c)}<span class="attmini"><button class="attb yes sm${s==='in'?' on':''}" data-att="${j.id}" data-n="${esc(c.name)}" data-s="in" aria-pressed="${s==='in'}" title="Veio">✓</button><button class="attb no sm${s==='out'?' on':''}" data-att="${j.id}" data-n="${esc(c.name)}" data-s="out" aria-pressed="${s==='out'}" title="Faltou">✗</button></span>`}
+function attBadge(j,c){if(P.escala)return '';const s=attOf(j,c.name);return s==='in'?'<span class="attmark in" title="Veio">✓</span>'+timeTag(j,c):s==='out'?'<span class="attmark out" title="Faltou">✗</span>':''}
 function attSummary(j){
   const a=ATT[j.id];if(!a||!j.crew.length)return j.crew.length?'<span class="hint">Presença ainda não confirmada pelo motorista.</span>':'';
   const vieram=j.crew.filter(c=>attOf(j,c.name)==='in').length,falt=absentNames(j),sem=j.crew.length-vieram-falt.length;
@@ -672,9 +678,10 @@ function setAtt(j,name,status){
   const prev=ATT[j.id]||{};const people=Object.assign({},prev.people||{});
   const k=Object.keys(people).find(n=>nkey(n)===nkey(name))||name;
   if(people[k]===status)delete people[k];else people[k]=status;
+  const times=Object.assign({},prev.times||{});if(people[k]!=='in')Object.keys(times).forEach(n=>{if(nkey(n)===nkey(name))delete times[n]});
   const now=new Date();
   const driver=P.escala?(prev.driver||jobDrivers(j)[0]||ME||''):ME;
-  const docData={date:cur,jobId:j.id,site:jobSite(j),company:j.company||'',driver,by:(ctx&&ctx.email)||'',people,at:now,atMs:now.getTime()};
+  const docData={date:cur,jobId:j.id,site:jobSite(j),company:j.company||'',driver,by:(ctx&&ctx.email)||'',people,times,at:now,atMs:now.getTime()};
   ATT[j.id]=docData;renderPhotos();if(!typing())renderJobs();
   db.doc('attendance/'+cur+'_'+j.id).set(docData).catch(e=>{console.error(e);toast('Não consegui salvar a presença ('+(e.code||'erro')+')')});
 }
@@ -861,6 +868,55 @@ async function cleanupOldPhotos(){
 }
 setTimeout(cleanupOldPhotos,8000);
 
+/* ---------- modo Totem (tablet no shop: cada um toca no nome e faz check-in) ----------
+   Grava em attendance/{data_jobId}: people[nome]='in' e times[nome]=hora. Não mexe na escala. */
+const todayISO=()=>iso(new Date());
+let totemOn=false,tPick=null,tTimer=null;
+function openTotem(){
+  totemOn=true;document.body.classList.add('totem-on');$('totem').hidden=false;
+  if(cur!==todayISO())setDate(todayISO());
+  $('tSearch').value='';renderTotem();clockTick();
+  clearInterval(tTimer);tTimer=setInterval(()=>{clockTick();if(cur!==todayISO())setDate(todayISO())},15000);
+}
+function closeTotem(){if(ctx&&ctx.totem)return;totemOn=false;clearInterval(tTimer);document.body.classList.remove('totem-on');$('totem').hidden=true;tCancel()}
+function clockTick(){const d=new Date();$('tClock').textContent=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase();$('tDate').textContent=dateBR(todayISO())}
+function renderTotem(){
+  if(!totemOn)return;
+  const q=nkey($('tSearch').value||'');
+  const jobs=D.jobs.filter(j=>j.crew.length);
+  const html=jobs.map(j=>{
+    const crew=j.crew.filter(c=>!q||nkey(c.name).includes(q));if(!crew.length)return '';
+    return `<section class="tjob"><div class="tjh"><b>${esc(j.company||'Obra')}</b><span>shop ${esc(fmt(j.shop)||'—')}</span></div>
+      <div class="tnames">${crew.map(c=>{const t=timeOf(j,c.name),done=attOf(j,c.name)==='in';
+        return `<button class="tname${done?' done':''}${isLate(j,c.name)?' late':''}" data-tin="${j.id}" data-n="${esc(c.name)}">${esc(c.name)}${done?`<small>✓ ${t?esc(new Date(t).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase()):'presente'}</small>`:''}</button>`}).join('')}</div></section>`}).join('');
+  $('tBody').innerHTML=dayLoaded?(html||`<p class="tempty">${jobs.length?'Nenhum nome encontrado.':'Ainda não tem escala lançada pra hoje.'}</p>`):'<p class="tempty">Carregando…</p>';
+}
+function tAsk(j,name){
+  if(attOf(j,name)==='in'){const t=timeOf(j,name);tShow(`<div class="tok">✓</div><h2>${esc(name)}</h2><p>Você já fez check-in${t?' às '+esc(new Date(t).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase()):''}.</p>`,3000);return}
+  tPick={jid:j.id,name};
+  $('tModal').hidden=false;
+  $('tModalBody').innerHTML=`<p class="tq">Você é</p><h2>${esc(name)}</h2><p class="tjobname">${esc(j.company||'')}</p>
+    <div class="tbtns"><button class="btn primary tyes" id="tYes">Sim, fazer check-in</button><button class="btn tno" id="tNo">Não sou eu</button></div>`;
+}
+function tCancel(){tPick=null;$('tModal').hidden=true}
+function tShow(html,ms){$('tModal').hidden=false;$('tModalBody').innerHTML=html;clearTimeout(tShow.t);tShow.t=setTimeout(tCancel,ms||2500)}
+function tCheckin(){
+  if(!tPick)return;const j=findJob(tPick.jid),name=tPick.name;tPick=null;if(!j)return tCancel();
+  const prev=ATT[j.id]||{};const people=Object.assign({},prev.people||{}),times=Object.assign({},prev.times||{});
+  const k=Object.keys(people).find(n=>nkey(n)===nkey(name))||name;people[k]='in';
+  const now=new Date();times[k]=now.getTime();
+  const docData={date:cur,jobId:j.id,site:jobSite(j),company:j.company||'',driver:prev.driver||jobDrivers(j)[0]||'',by:(ctx&&ctx.email)||'',people,times,at:now,atMs:now.getTime()};
+  ATT[j.id]=docData;renderTotem();
+  db.doc('attendance/'+cur+'_'+j.id).set(docData).catch(e=>{console.error(e);tShow('<div class="tbad">!</div><h2>Não salvou</h2><p>Chame o escritório ('+esc(e.code||'erro')+').</p>',5000)});
+  const late=isLate(j,name);
+  tShow(`<div class="tok">✓</div><h2>Bom dia, ${esc(name.split(' ')[0])}!</h2><p>Check-in às <b>${esc(now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase())}</b>${late?'<br><span class="tlate">depois do horário do shop</span>':''}</p><p class="tjobname">${esc(j.company||'')}</p>`,3000);
+}
+$('tBody').addEventListener('click',e=>{const b=e.target.closest('[data-tin]');if(!b)return;const j=findJob(b.dataset.tin);if(j)tAsk(j,b.dataset.n)});
+$('tModal').addEventListener('click',e=>{if(e.target.id==='tYes')tCheckin();else if(e.target.id==='tNo'||e.target.id==='tModal')tCancel()});
+$('tSearch').addEventListener('input',renderTotem);
+$('tExit').onclick=closeTotem;
+if($('openTotem')){$('openTotem').hidden=!P.escala||!!(ctx&&ctx.totem);$('openTotem').onclick=openTotem}
+
 /* ---------- início ---------- */
 (()=>{const tb=$('topbar');if(!tb)return;const set=()=>document.documentElement.style.setProperty('--topH',tb.offsetHeight+'px');set();
   try{new ResizeObserver(set).observe(tb)}catch(e){window.addEventListener('resize',set)}})();
@@ -872,5 +928,6 @@ db.doc(ROSTER).onSnapshot(remoteRoster,e=>{console.error(e);setStatus('err')});
 if(P.telefones)db.doc(PHONES).onSnapshot(remotePhones,e=>{console.error(e)});else phonesLoaded=true;
 setStatus('ok');
 watchDay();
+if((ctx&&ctx.totem)||(location.hash==='#totem'&&P.escala))openTotem();
 return {flushAll};
 }

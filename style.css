@@ -310,3 +310,42 @@ body.viewer{padding-bottom:24px}
 .checks{display:flex;flex-wrap:wrap;gap:6px 18px}
 .check.office{color:var(--ink)}
 .offrow .offlbl{flex:none;font-size:13px;color:var(--muted);width:72px}
+
+/* ---- hora do check-in (totem) na presença ---- */
+.ttime{font-size:12px;font-weight:600;color:var(--ok);margin-right:4px;font-variant-numeric:tabular-nums}
+.ttime.late{color:var(--warn)}
+/* ---- modo Totem ---- */
+.totem-on{overflow:hidden}
+.totem{position:fixed;inset:0;z-index:40;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;padding:calc(12px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));overflow:hidden}
+.ttop{display:flex;align-items:center;gap:16px}
+.tlogo{width:120px}
+.tclock{flex:1;display:flex;flex-direction:column;align-items:center}
+.tclock b{font-family:var(--f-display);font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
+.tclock span{color:var(--muted);text-transform:capitalize}
+.texit{opacity:.5;font-size:13px}
+.thelp{text-align:center;font-family:var(--f-display);font-size:24px;text-transform:uppercase;letter-spacing:.04em;margin:14px 0 8px;color:var(--hivis)}
+.tsearch{align-self:center;width:min(480px,100%);font-size:18px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);margin-bottom:12px}
+.tbody{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-bottom:20px}
+.tjob{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.tjh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+.tjh b{font-family:var(--f-display);font-size:22px}
+.tjh span{color:var(--muted)}
+.tnames{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.tname{min-height:64px;border:2px solid var(--line);background:var(--sunk);color:var(--ink);border-radius:12px;font-size:19px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px}
+.tname:active{transform:scale(.98)}
+.tname.done{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.tname.done.late{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.tname small{font-size:14px;font-weight:600}
+.tempty{text-align:center;color:var(--muted);font-size:18px;margin-top:40px}
+.tmodal{position:fixed;inset:0;z-index:41;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+.tcard{background:var(--surface);color:var(--ink);border-radius:18px;padding:28px 24px;width:min(460px,100%);text-align:center;display:flex;flex-direction:column;gap:10px}
+.tcard h2{font-family:var(--f-display);font-size:34px}
+.tq{color:var(--muted);font-size:18px;margin:0}
+.tjobname{color:var(--muted);margin:0}
+.tcard p{margin:0;font-size:18px}
+.tbtns{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.tyes{padding:18px;font-size:20px}
+.tno{padding:14px;font-size:17px}
+.tok{width:72px;height:72px;border-radius:50%;background:var(--ok);color:var(--surface);font-size:40px;display:flex;align-items:center;justify-content:center;align-self:center}
+.tbad{width:72px;height:72px;border-radius:50%;background:var(--bad);color:var(--surface);font-size:40px;display:flex;align-items:center;justify-content:center;align-self:center}
+.tlate{color:var(--warn);font-weight:600}
