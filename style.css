@@ -240,3 +240,18 @@ body.viewer{padding-bottom:24px}
 .wlink select{border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:var(--surface);color:var(--ink)}
 #newLink{margin-top:10px}
 .viewer .preview-col #photosPanel{order:-1}
+
+.phthumb.loading{background:linear-gradient(90deg,var(--sunk),var(--line),var(--sunk));background-size:200% 100%}
+@media (prefers-reduced-motion:no-preference){.phthumb.loading{animation:shim 1.2s linear infinite}@keyframes shim{to{background-position:-200% 0}}}
+.galtools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;color:var(--muted);font-size:14px}
+.galday{font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+.galday::first-letter{text-transform:uppercase}
+.sitesearch{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 12px;background:var(--surface);color:var(--ink);margin-bottom:12px}
+.sitelist{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.sitecard{display:flex;gap:12px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:8px;cursor:pointer}
+.sitecard:hover{border-color:var(--hivis)}
+.sitecover{width:72px;height:72px;flex:none;border-radius:8px;overflow:hidden;background:var(--sunk)}
+.sitecover img{width:100%;height:100%;object-fit:cover;display:block}
+.siteinfo{display:flex;flex-direction:column;gap:2px;min-width:0}
+.siteinfo b{font-weight:600;overflow-wrap:anywhere}
+.siteinfo small{color:var(--muted);overflow-wrap:anywhere}

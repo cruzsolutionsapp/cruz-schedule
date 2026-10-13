@@ -212,7 +212,7 @@ function rememberAddr(j){
 const nkey=n=>n.trim().toLowerCase();
 function phoneOf(name){const k=Object.keys(PH).find(p=>nkey(p)===nkey(name));return k?PH[k]:''}
 function waDigits(p){let d=(p||'').replace(/\D/g,'');if(d.length===10)d='1'+d;return d.length>=11?d:''}
-function dateBR(){const[y,m,d]=cur.split('-');const wd=['domingo','segunda','terça','quarta','quinta','sexta','sábado'][new Date(+y,m-1,+d).getDay()];return wd+' '+d+'/'+m}
+function dateBR(x){const[y,m,d]=(x||cur).split('-');const wd=['domingo','segunda','terça','quarta','quinta','sexta','sábado'][new Date(+y,m-1,+d).getDay()];return wd+' '+d+'/'+m}
 function personalMsg(c,j){
   const L=[`Fala ${c.name.trim().split(/\s+/)[0]}! Seu schedule de ${dateBR()}:`,'','✅ '+(j.company.trim()||'Obra'),j.waiting?'(Endereço ainda não confirmado)':j.address.trim()];
   if(j.attire.trim())L.push('🔴 '+j.attire.trim());
@@ -316,7 +316,7 @@ function renderJobs(){
           ${crew}
           ${picker||`<button class="btn" data-act="pickopen">+ Adicionar pessoas</button>`}
         </div>
-        ${P.fotos?`<button class="btn phcount" data-act="photos">📷 Fotos da obra <b id="pc-${j.id}">${photoCount(j.id)}</b></button>`:''}
+        ${P.fotos?`<button class="btn phcount" data-act="photos">📷 Fotos da obra <b id="pc-${j.id}">${photoCount(j)}</b></button>`:''}
         <div><button class="btn danger" data-act="del">${confirmDel===j.id?'Toque de novo pra apagar':'Apagar obra'}</button></div>
       </div></article>`;
   }).join(''):'<div class="panel empty">Nenhuma obra neste dia. Toque em "+ Nova obra" ou "Copiar último dia".</div>';
@@ -371,7 +371,7 @@ $('jobs').addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b||b.tagName==='SELECT')return;
   const card=b.closest('.job');const j=findJob(card.dataset.id);if(!j)return;const jobs=D.jobs;const i=jobs.indexOf(j);
   const act=b.dataset.act;let changed=true;
-  if(act==='photos'){openGallery(j.id);return}
+  if(act==='photos'){openGallery(jobSite(j),(j.company||'Obra')+(j.waiting||!j.address?'':' · '+j.address));return}
   if(!P.escala)return;
   if(act==='del'&&!P.apagar)return;
   if(act!=='del')confirmDel=null;
@@ -445,7 +445,7 @@ $('copyMsg').onclick=()=>{
 };
 
 /* ---------- abas ---------- */
-function tab(which){['day','roster','access'].forEach(t=>{const b=$('tab-'+t),v=$('view-'+t);if(b)b.setAttribute('aria-selected',t===which);if(v)v.hidden=t!==which})}
+function tab(which){['day','roster','access','photos'].forEach(t=>{const b=$('tab-'+t),v=$('view-'+t);if(b)b.setAttribute('aria-selected',t===which);if(v)v.hidden=t!==which})}
 $('tab-day').onclick=()=>{tab('day');renderJobs()};$('tab-roster').onclick=()=>{tab('roster');renderRoster()};if($('tab-access'))$('tab-access').onclick=()=>tab('access');
 
 /* ---------- cadastro ---------- */
@@ -592,11 +592,16 @@ $('importInfo').addEventListener('click',async e=>{
   }catch(err){console.error(err);toast('Falhou a importação: '+(err&&err.code||'erro'))}
 });
 
-/* ---------- fotos da obra (versão de teste: fotos guardadas no banco) ---------- */
+/* ---------- fotos da obra (versão de teste: fotos guardadas no banco) ----------
+   photos/{id}: só os dados (leve, pra listar)  ·  photoThumb/{id}: miniatura  ·  photoFull/{id}: foto grande
+   Agrupadas por obra = companhia + endereço (site), juntando todos os dias. */
 const ME=(ctx&&ctx.worker)||'';
-let photosUnsub=null,PHOTOS=[],photoQueue=0,galleryJob=null,viewing=null;
+const siteKey=(c,a)=>(akey(c||'')+'|'+akey(a||'')).slice(0,400);
+const jobSite=j=>siteKey(j.company,j.waiting?'':j.address);
+let photosUnsub=null,PHOTOS=[],photoQueue=0,galSite=null,galTitle='',galUnsub=null,GAL=[],viewing=null;
+const THUMB={};
 function myJobs(){if(!ME)return [];return D.jobs.filter(j=>j.crew.some(c=>c.v&&nkey(c.name)===nkey(ME)))}
-function photoCount(id){const n=PHOTOS.filter(p=>p.jobId===id).length;return n?String(n):''}
+function photoCount(j){const k=jobSite(j);const n=PHOTOS.filter(p=>p.site?p.site===k:p.jobId===j.id).length;return n?n+' hoje':''}
 function watchPhotos(){
   if(photosUnsub){photosUnsub();photosUnsub=null}
   PHOTOS=[];
@@ -605,9 +610,16 @@ function watchPhotos(){
   if(!P.fotos)q=q.where('driver','==',ME);
   photosUnsub=q.onSnapshot(s=>{
     PHOTOS=s.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>(a.atMs||0)-(b.atMs||0));
-    renderPhotos();D.jobs.forEach(j=>{const el=$('pc-'+j.id);if(el)el.textContent=photoCount(j.id)});
-    if(galleryJob)renderGallery();
+    renderPhotos();D.jobs.forEach(j=>{const el=$('pc-'+j.id);if(el)el.textContent=photoCount(j)});
   },e=>console.error(e));
+}
+function needThumbs(list,redraw){
+  list.forEach(p=>{
+    if(p.thumb){THUMB[p.id]=p.thumb;return}
+    if(p.id in THUMB)return;
+    THUMB[p.id]=null;
+    db.doc('photoThumb/'+p.id).get().then(s=>{THUMB[p.id]=s.exists?s.data().thumb:'';redraw()}).catch(()=>{THUMB[p.id]=''});
+  });
 }
 async function shrink(file,max,q,limit){
   const url=URL.createObjectURL(file);
@@ -624,52 +636,119 @@ async function uploadPhotos(j,files){
   let ok=0;
   for(const f of files){
     if(!f.type||!f.type.startsWith('image/'))continue;
-    photoQueue++;renderPhotos();if(galleryJob)renderGallery();
+    photoQueue++;redrawPhotos();
     try{
       const full=await shrink(f,1600,0.72,850000),th=await shrink(f,320,0.6,55000);
       const id='p'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
       const now=new Date(),exp=new Date(now.getTime()+365*864e5);
       const driver=P.fotos?((j.crew.find(c=>c.v)||{}).name||ME||''):ME;
-      const meta={date:cur,jobId:j.id,company:j.company||'',address:j.waiting?'':(j.address||''),driver,by:(ctx&&ctx.email)||'',at:now,atMs:now.getTime(),expireAt:exp,w:full.w,h:full.h};
+      const base={date:cur,jobId:j.id,driver,by:(ctx&&ctx.email)||''};
+      const meta=Object.assign({},base,{site:jobSite(j),company:j.company||'',address:j.waiting?'':(j.address||''),at:now,atMs:now.getTime(),expireAt:exp,w:full.w,h:full.h});
       const fail=e=>{console.error(e);toast('A foto não foi salva ('+(e&&e.code||'erro')+')')};
-      db.doc('photoFull/'+id).set(Object.assign({},meta,{data:full.data})).catch(fail);
-      db.doc('photos/'+id).set(Object.assign({},meta,{thumb:th.data})).catch(fail);
+      THUMB[id]=th.data;
+      db.doc('photoFull/'+id).set(Object.assign({},base,{data:full.data,expireAt:exp})).catch(fail);
+      db.doc('photoThumb/'+id).set(Object.assign({},base,{thumb:th.data,expireAt:exp})).catch(fail);
+      db.doc('photos/'+id).set(meta).catch(fail);
       ok++;
     }catch(e){console.error(e);toast('Não consegui ler uma das fotos')}
-    photoQueue--;renderPhotos();if(galleryJob)renderGallery();
+    photoQueue--;redrawPhotos();
   }
   if(ok)toast(navigator.onLine?(ok>1?ok+' fotos enviadas':'Foto enviada'):'Sem internet: as fotos sobem quando a conexão voltar');
 }
+function redrawPhotos(){renderPhotos();if(galSite)renderGallery()}
+const hhmm=ms=>new Date(ms).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 const camBtns=jid=>`<div class="phbtns"><label class="btn primary phbtn">📷 Tirar foto<input type="file" accept="image/*" capture="environment" hidden data-upjob="${jid}"></label>
   <label class="btn phbtn2">🖼️ Da galeria<input type="file" accept="image/*" multiple hidden data-upjob="${jid}"></label></div>`;
-const thumbs=list=>list.length?`<div class="phgrid">${list.map(p=>`<button class="phthumb" data-ph="${p.id}" aria-label="Abrir foto"><img src="${p.thumb}" alt=""><span>${esc(new Date(p.atMs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))}</span></button>`).join('')}</div>`:'<span class="empty">Nenhuma foto ainda.</span>';
+const thumbBtn=(p,label)=>`<button class="phthumb${THUMB[p.id]?'':' loading'}" data-ph="${p.id}" aria-label="Abrir foto">${THUMB[p.id]?`<img src="${THUMB[p.id]}" alt="">`:''}<span>${esc(label)}</span></button>`;
 function renderPhotos(){
   const box=$('photosPanel');if(!box)return;
   const jobs=myJobs();
   if(!ME||!jobs.length){box.hidden=true;return}
   box.hidden=false;
-  $('photosBody').innerHTML=jobs.map(j=>`<div class="phjob"><div class="phhead"><b>${esc(j.company||'Obra')}</b><small>${esc(j.waiting?'Endereço a confirmar':j.address)}</small></div>
-    ${camBtns(j.id)}${thumbs(PHOTOS.filter(p=>p.jobId===j.id))}</div>`).join('')+(photoQueue?`<p class="hint">Preparando ${photoQueue} foto(s)…</p>`:'');
+  const list=PHOTOS.filter(p=>p.driver===ME);needThumbs(list,renderPhotos);
+  $('photosBody').innerHTML=jobs.map(j=>{const mine=list.filter(p=>p.site?p.site===jobSite(j):p.jobId===j.id);
+    return `<div class="phjob"><div class="phhead"><b>${esc(j.company||'Obra')}</b><small>${esc(j.waiting?'Endereço a confirmar':j.address)}</small></div>
+    ${camBtns(j.id)}
+    ${mine.length?`<div class="phgrid">${mine.map(p=>thumbBtn(p,hhmm(p.atMs))).join('')}</div>`:'<span class="empty">Nenhuma foto hoje.</span>'}
+    <button class="linkbtn" data-site="${esc(jobSite(j))}" data-title="${esc((j.company||'Obra')+(j.waiting||!j.address?'':' · '+j.address))}">Ver todas as fotos desta obra →</button></div>`}).join('')
+    +(photoQueue?`<p class="hint">Preparando ${photoQueue} foto(s)…</p>`:'');
 }
-function openGallery(jid){galleryJob=jid;$('gallery').hidden=false;document.body.classList.add('modal-open');renderGallery()}
-function closeGallery(){galleryJob=null;$('gallery').hidden=true;document.body.classList.remove('modal-open')}
+function openGallery(site,title){
+  galSite=site;galTitle=title||'Fotos';GAL=[];
+  if(galUnsub){galUnsub();galUnsub=null}
+  let q=db.collection('photos').where('site','==',site);
+  if(!P.fotos)q=q.where('driver','==',ME);
+  galUnsub=q.onSnapshot(s=>{GAL=s.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>(b.atMs||0)-(a.atMs||0));renderGallery()},e=>{console.error(e);$('galBody').innerHTML='<p class="authmsg bad">Não consegui carregar as fotos ('+esc(e.code||'erro')+').</p>'});
+  $('gallery').hidden=false;document.body.classList.add('modal-open');renderGallery();
+}
+function closeGallery(){galSite=null;if(galUnsub){galUnsub();galUnsub=null}$('gallery').hidden=true;if(!viewing)document.body.classList.remove('modal-open')}
 function renderGallery(){
-  const j=findJob(galleryJob);if(!j){closeGallery();return}
-  const list=PHOTOS.filter(p=>p.jobId===j.id);
-  $('galTitle').textContent=(j.company||'Obra')+' · '+dateBR();
-  $('galBody').innerHTML=camBtns(j.id)+(photoQueue?`<p class="hint">Preparando ${photoQueue} foto(s)…</p>`:'')+
-    (list.length?`<div class="phgrid big">${list.map(p=>`<button class="phthumb" data-ph="${p.id}" aria-label="Abrir foto"><img src="${p.thumb}" alt=""><span>${esc(p.driver||'')} · ${esc(new Date(p.atMs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}))}</span></button>`).join('')}</div>`:'<p class="empty">Nenhuma foto desta obra neste dia.</p>');
+  if(!galSite)return;
+  $('galTitle').textContent=galTitle;
+  needThumbs(GAL,renderGallery);
+  const today=D.jobs.find(j=>jobSite(j)===galSite&&(P.fotos||myJobs().includes(j)));
+  const days=[];GAL.forEach(p=>{let g=days.find(x=>x.date===p.date);if(!g)days.push(g={date:p.date,list:[]});g.list.push(p)});
+  $('galBody').innerHTML=(today?camBtns(today.id):'')+(photoQueue?`<p class="hint">Preparando ${photoQueue} foto(s)…</p>`:'')
+    +(GAL.length?`<div class="galtools"><span>${GAL.length} foto${GAL.length>1?'s':''} em ${days.length} dia${days.length>1?'s':''}</span><button class="btn" id="zipAll">⬇️ Baixar todas (.zip)</button></div>`:'')
+    +(days.length?days.map(g=>`<h3 class="galday">${esc(dateBR(g.date))}</h3><div class="phgrid big">${g.list.map(p=>thumbBtn(p,(p.driver?p.driver+' · ':'')+hhmm(p.atMs))).join('')}</div>`).join('')
+      :'<p class="empty">Nenhuma foto desta obra ainda.</p>');
+}
+async function zipAll(btn){
+  const list=GAL.slice();if(!list.length)return;
+  btn.disabled=true;const label=btn.textContent;
+  try{
+    if(!window.JSZip)await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s)});
+    const zip=new JSZip();let n=0;
+    for(const p of list){
+      n++;btn.textContent=`Juntando ${n} de ${list.length}…`;
+      const s=await db.doc('photoFull/'+p.id).get();if(!s.exists)continue;
+      const t=new Date(p.atMs);
+      zip.file(`${p.date}_${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}_${(p.driver||'foto').replace(/[^\w-]+/g,'-')}.jpg`,s.data().data.split(',')[1],{base64:true});
+    }
+    btn.textContent='Gerando arquivo…';
+    const blob=await zip.generateAsync({type:'blob'});
+    await dl.save({filename:'fotos_'+galTitle.replace(/[^\w-]+/g,'-').replace(/-+/g,'-').slice(0,60)+'.zip',data:blob});
+  }catch(e){console.error(e);toast('Não consegui gerar o .zip. Confira a internet e tente de novo.')}
+  finally{btn.disabled=false;btn.textContent=label}
 }
 async function openViewer(id){
-  const p=PHOTOS.find(x=>x.id===id);if(!p)return;
+  const p=GAL.find(x=>x.id===id)||PHOTOS.find(x=>x.id===id)||ALLPH.find(x=>x.id===id);if(!p)return;
   viewing=p;$('phview').hidden=false;document.body.classList.add('modal-open');
-  $('pvImg').src=p.thumb;$('pvInfo').textContent=`${p.company} · ${p.driver||''} · ${new Date(p.atMs).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`;
+  $('pvImg').src=THUMB[id]||'';$('pvInfo').textContent=`${p.company||''} · ${p.driver||''} · ${new Date(p.atMs).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`;
   $('pvDel').hidden=!(P.fotos||p.by===(ctx&&ctx.email));$('pvDel').textContent='Apagar';delete $('pvDel').dataset.confirm;
   try{const s=await db.doc('photoFull/'+id).get();if(viewing===p&&s.exists)$('pvImg').src=s.data().data}catch(e){console.error(e)}
 }
-function closeViewer(){viewing=null;$('phview').hidden=true;$('pvImg').src='';if(!galleryJob)document.body.classList.remove('modal-open')}
+function closeViewer(){viewing=null;$('phview').hidden=true;$('pvImg').src='';if(!galSite)document.body.classList.remove('modal-open')}
+async function deletePhoto(id){for(const c of ['photos','photoThumb','photoFull']){try{await db.doc(c+'/'+id).delete()}catch(e){if(c==='photos')throw e}}}
+
+/* aba Fotos: todas as obras com fotos (só pra quem tem "Ver todas as fotos") */
+let ALLPH=[];
+async function loadAllPhotos(){
+  if(!P.fotos)return;
+  $('siteList').innerHTML='<p class="hint">Carregando…</p>';
+  try{const s=await db.collection('photos').orderBy('atMs','desc').limit(2000).get();ALLPH=s.docs.map(d=>Object.assign({id:d.id},d.data()));renderSites()}
+  catch(e){console.error(e);$('siteList').innerHTML='<p class="authmsg bad">Não consegui carregar ('+esc(e.code||'erro')+').</p>'}
+}
+function renderSites(){
+  const q=akey($('siteSearch').value||'');
+  const map=new Map();
+  ALLPH.forEach(p=>{const k=p.site||siteKey(p.company,p.address);let g=map.get(k);if(!g)map.set(k,g={site:k,company:p.company||'Obra',address:p.address||'',n:0,last:p.date,cover:p,days:new Set()});g.n++;g.days.add(p.date)});
+  const list=[...map.values()].filter(g=>!q||akey(g.company+' '+g.address).includes(q));
+  needThumbs(list.map(g=>g.cover),renderSites);
+  $('siteList').innerHTML=list.length?list.map(g=>`<button class="sitecard" data-site="${esc(g.site)}" data-title="${esc(g.company+(g.address?' · '+g.address:''))}">
+      <span class="sitecover">${THUMB[g.cover.id]?`<img src="${THUMB[g.cover.id]}" alt="">`:''}</span>
+      <span class="siteinfo"><b>${esc(g.company)}</b><small>${esc(g.address||'Sem endereço')}</small><small>${g.n} foto${g.n>1?'s':''} · ${g.days.size} dia${g.days.size>1?'s':''} · última ${esc(dateBR(g.last))}</small></span></button>`).join('')
+    :`<p class="empty">${ALLPH.length?'Nenhuma obra encontrada com esse nome.':'Ainda não tem nenhuma foto.'}</p>`;
+}
+if($('tab-photos')){$('tab-photos').hidden=!P.fotos||viewer;$('tab-photos').onclick=()=>{tab('photos');loadAllPhotos()}}
+$('siteSearch').addEventListener('input',renderSites);
+
 document.addEventListener('change',e=>{const jid=e.target.dataset&&e.target.dataset.upjob;if(!jid)return;const j=findJob(jid);const files=[...e.target.files];e.target.value='';if(j&&files.length)uploadPhotos(j,files)});
-document.addEventListener('click',e=>{const t=e.target.closest('[data-ph]');if(t){openViewer(t.dataset.ph)}});
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-ph]');if(t){openViewer(t.dataset.ph);return}
+  const s=e.target.closest('[data-site]');if(s){openGallery(s.dataset.site,s.dataset.title);return}
+  if(e.target.id==='zipAll')zipAll(e.target);
+});
 $('galClose').onclick=closeGallery;$('gallery').addEventListener('click',e=>{if(e.target.id==='gallery')closeGallery()});
 $('pvClose').onclick=closeViewer;$('phview').addEventListener('click',e=>{if(e.target.id==='phview')closeViewer()});
 $('pvSave').onclick=async()=>{if(!viewing)return;const p=viewing;
@@ -678,15 +757,15 @@ $('pvSave').onclick=async()=>{if(!viewing)return;const p=viewing;
 $('pvDel').onclick=async()=>{if(!viewing)return;const b=$('pvDel');
   if(b.dataset.confirm!=='1'){b.dataset.confirm='1';b.textContent='Toque de novo pra apagar';return}
   const id=viewing.id;closeViewer();
-  try{await db.doc('photos/'+id).delete();await db.doc('photoFull/'+id).delete();toast('Foto apagada')}catch(e){toast('Não consegui apagar ('+(e.code||'erro')+')')}};
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(viewing)closeViewer();else if(galleryJob)closeGallery()}});
+  try{await deletePhoto(id);ALLPH=ALLPH.filter(x=>x.id!==id);toast('Foto apagada')}catch(e){toast('Não consegui apagar ('+(e.code||'erro')+')')}};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(viewing)closeViewer();else if(galSite)closeGallery()}});
 
 // Limpeza automática: quem tem "Ver todas as fotos" apaga, ao abrir o app, as fotos com mais de 1 ano
 async function cleanupOldPhotos(){
   if(!P.fotos||!isAdmin)return;
   try{
     const old=await db.collection('photos').where('expireAt','<',new Date()).limit(100).get();
-    for(const d of old.docs){await db.doc('photos/'+d.id).delete();await db.doc('photoFull/'+d.id).delete()}
+    for(const d of old.docs)await deletePhoto(d.id);
     if(old.size)console.log('Fotos antigas apagadas:',old.size);
   }catch(e){console.error(e)}
 }

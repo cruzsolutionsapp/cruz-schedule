@@ -65,9 +65,16 @@ service cloud.firestore {
       allow read, write: if can('telefones');
     }
 
-    // Fotos da obra (versão de teste: guardadas no banco). Miniatura em /photos, foto grande em /photoFull.
-    // O motorista vê só as fotos das obras em que ele é o motorista; quem tem "Ver todas as fotos" vê tudo.
+    // Fotos da obra (versão de teste: guardadas no banco).
+    // /photos = dados da foto (leve), /photoThumb = miniatura, /photoFull = foto grande.
+    // O motorista vê só as fotos em que ele é o motorista; quem tem "Ver todas as fotos" vê tudo.
     match /photos/{id} {
+      allow read: if can('fotos') || isMyPhoto(resource.data);
+      allow create: if photoOk(request.resource.data) && !('data' in request.resource.data)
+        && (!('thumb' in request.resource.data) || request.resource.data.thumb.size() < 60000);
+      allow delete: if can('fotos') || (isMember() && resource.data.by == me());
+    }
+    match /photoThumb/{id} {
       allow read: if can('fotos') || isMyPhoto(resource.data);
       allow create: if photoOk(request.resource.data) && request.resource.data.thumb.size() < 60000;
       allow delete: if can('fotos') || (isMember() && resource.data.by == me());
