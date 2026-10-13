@@ -841,6 +841,8 @@ async function cleanupOldPhotos(){
 setTimeout(cleanupOldPhotos,8000);
 
 /* ---------- início ---------- */
+(()=>{const tb=$('topbar');if(!tb)return;const set=()=>document.documentElement.style.setProperty('--topH',tb.offsetHeight+'px');set();
+  try{new ResizeObserver(set).observe(tb)}catch(e){window.addEventListener('resize',set)}})();
 if(viewer)tab('day');
 $('date').value=cur;
 S=normRoster(null);

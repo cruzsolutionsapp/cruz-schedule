@@ -294,3 +294,12 @@ body.viewer{padding-bottom:24px}
 .addend{align-self:stretch;justify-content:center;padding:14px;border-style:dashed;font-weight:600;color:var(--hivis)}
 .no-escala #addJob2,.viewer .topbar .tabs{display:none!important}
 @media (max-width:520px){.topbar header h1{font-size:24px}.topbar .logo{width:72px}.topbar .sync{font-size:12px}}
+
+/* coluna da direita: rola sozinha entre o cabeçalho fixo e a barra de baixo */
+:root{--topH:120px}
+@media (min-width:900px){
+  .preview-col{top:calc(var(--topH) + 12px);max-height:calc(100vh - var(--topH) - 96px);overflow-y:auto;overscroll-behavior:contain;padding-bottom:8px;scrollbar-width:thin}
+  .viewer .preview-col{max-height:none;overflow:visible}
+}
+.job{scroll-margin-top:calc(var(--topH) + 12px)}
+.free .chips{max-height:none}
