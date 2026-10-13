@@ -61,7 +61,7 @@ function normRoster(d){return {workers:Array.isArray(d&&d.workers)?[...d.workers
   travel:(d&&d.travel&&typeof d.travel==='object')?{...d.travel}:{},
   drivers:Array.isArray(d&&d.drivers)?d.drivers.filter(x=>typeof x==='string'):[],
   offices:(d&&d.offices&&typeof d.offices==='object')?{...d.offices}:{}}}
-function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.forEach(j=>{j.id=j.id||nid();j.need=+j.need||0;delete j.calc;j.travel=Number.isFinite(j.travel)?j.travel:null;j.autoShop=!!j.autoShop;j.early=Number.isFinite(j.early)?j.early:30;j.tk=j.tk||'';j.crew=Array.isArray(j.crew)?j.crew:[];['company','address','attire','shop','start','note'].forEach(k=>j[k]=j[k]||'');j.allWeek=!!j.allWeek;j.waiting=!!j.waiting;j.office=!!j.office});return {date:cur,jobs,sent:(d&&d.sent&&typeof d.sent==='object')?{...d.sent}:{}}}
+function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.forEach(j=>{j.id=j.id||nid();j.need=+j.need||0;delete j.calc;j.travel=Number.isFinite(j.travel)?j.travel:null;j.autoShop=!!j.autoShop;j.early=Number.isFinite(j.early)?j.early:30;j.tk=j.tk||'';j.crew=Array.isArray(j.crew)?j.crew:[];['company','address','attire','shop','start','note'].forEach(k=>j[k]=j[k]||'');j.allWeek=!!j.allWeek;j.waiting=!!j.waiting;j.office=!!j.office;j.left=Number.isFinite(j.left)?j.left:0});return {date:cur,jobs,sent:(d&&d.sent&&typeof d.sent==='object')?{...d.sent}:{}}}
 
 /* evita re-render enquanto a pessoa digita */
 function typing(){const a=document.activeElement;return a&&(a.tagName==='INPUT'||a.tagName==='SELECT')&&!a.id.startsWith('extra-')&&a.id!=='newWorker'}
@@ -297,6 +297,7 @@ $('notify').addEventListener('change',e=>{const n=e.target.dataset.phone;if(n==n
   if(!waDigits(v)){toast('Número inválido. Use o formato (508) 555-1234');return}
   PH[n]=v;savePhones();renderNotify();renderRoster()});
 
+const leftTime=j=>new Date(j.left).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase();
 function needCls(j){if(!j.need)return'';return j.crew.length<j.need?'short':j.crew.length>j.need?'over':'full'}
 function needText(j){const n=j.crew.length;if(!j.need)return n+(n===1?' pessoa':' pessoas');
   const d=j.need-n;return n+' de '+j.need+(d>0?' · falta '+d:d<0?' · sobra '+(-d):' ✓')}
@@ -328,6 +329,7 @@ function renderJobs(){
     return `<article class="job" data-id="${j.id}">
       <div class="job-head">
         <span class="num">${i+1}</span>
+        <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu às '+leftTime(j)+' (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span>${j.left?`<small>${leftTime(j)}</small>`:''}</button>
         <input data-f="company" list="companyList" value="${esc(j.company)}" placeholder="Companhia" aria-label="Companhia" id="co-${j.id}">
         <span class="wkbadge" ${j.allWeek?'':'hidden'}>All Week</span>
         <button class="icon-btn" data-act="up" aria-label="Subir">↑</button>
@@ -438,6 +440,7 @@ $('jobs').addEventListener('click',e=>{
   else if(act==='extra'){const inp=$('extra-'+j.id);const n=fmtName(inp.value);if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:''})}
   else if(act==='up'&&i>0){jobs.splice(i,1);jobs.splice(i-1,0,j)}
   else if(act==='down'&&i<jobs.length-1){jobs.splice(i,1);jobs.splice(i+1,0,j)}
+  else if(act==='left'){j.left=j.left?0:Date.now()}
   else if(act==='auto'){j.autoShop=true;recompute(j)}
   else if(act==='early'){j.early=+b.dataset.m;recompute(j)}
   else if(act==='calc'){lookupTravel(j);return}
@@ -459,7 +462,7 @@ async function copyJobToNext(j,btn){
     const jobs=Array.isArray(day.jobs)?day.jobs:[];
     const key=x=>akey((x.company||'')+'|'+(x.address||''));
     if(jobs.some(x=>key(x)===key(j))){toast(`${j.company||'Essa obra'} já está em ${nice}`);return}
-    const {calc,prevAddr,...rest}=clone(j);
+    const {calc,prevAddr,left,...rest}=clone(j);
     jobs.push(Object.assign(rest,{id:nid()}));
     const drivers={};jobs.forEach(x=>{const n=jobDrivers({crew:x.crew||[]});if(n.length)drivers[x.id]=n});
     await db.doc(dayPath(next)).set({date:next,jobs,sent:day.sent||{},drivers});
@@ -482,7 +485,7 @@ $('copyPrev').onclick=async()=>{
       keys.filter(k=>k<cur).sort().reverse().some(k=>{const b=JSON.parse(localStorage.getItem(LKEY+'days/'+k));if(b&&b.jobs&&b.jobs.length){prev=k;jobs=b.jobs;return true}})}
   }catch(e){toast('Não consegui buscar o dia anterior');return}
   if(!prev){toast('Nenhum dia anterior salvo');return}
-  D.jobs=clone(jobs).map(j=>({...j,id:nid()}));D.sent={};saveDay();renderJobs();
+  D.jobs=clone(jobs).map(j=>({...j,id:nid(),left:0}));D.sent={};saveDay();renderJobs();
   toast('Copiado de '+prev.split('-').reverse().join('/'));
 };
 $('bringWeek').onclick=async()=>{
@@ -502,7 +505,7 @@ $('bringWeek').onclick=async()=>{
   const add=[...found.values()].filter(j=>!have.has(key(j)));
   if(!found.size){toast('Nenhuma obra marcada como All Week nesta semana');return}
   if(!add.length){toast('As obras All Week já estão neste dia');return}
-  add.forEach(j=>D.jobs.push({...clone(j),id:nid()}));
+  add.forEach(j=>D.jobs.push({...clone(j),id:nid(),left:0}));
   saveDay();renderJobs();toast(add.length+(add.length>1?' obras trazidas':' obra trazida'));
 };
 $('clearDay').onclick=()=>{if(!P.apagar)return;if(confirmClear){D.jobs=[];D.sent={};confirmClear=false;$('clearDay').textContent='Limpar dia';saveDay();renderJobs()}else{confirmClear=true;$('clearDay').textContent='Toque de novo pra limpar'}};

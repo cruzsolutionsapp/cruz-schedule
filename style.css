@@ -61,6 +61,13 @@ header h1 span{color:var(--hivis)}
 .job-head .num{font-family:var(--f-display);font-weight:700;font-size:15px;background:var(--ink);color:var(--surface);border-radius:4px;padding:1px 7px;font-variant-numeric:tabular-nums}
 .job-head input{flex:1;min-width:0;border:0;background:transparent;font-family:var(--f-display);font-size:22px;font-weight:700;padding:2px 0}
 .job-head .icon-btn{width:32px;height:32px;font-size:15px}
+/* Bolinha "turma saiu": vermelha = ainda não saiu, verde = já saiu (com a hora) */
+.leftdot{flex:none;display:inline-flex;align-items:center;gap:5px;min-width:36px;height:36px;justify-content:center;padding:0 6px;border:1px solid var(--line);border-radius:18px;background:var(--surface);cursor:pointer}
+.leftdot .dot{width:18px;height:18px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 3px var(--bad-soft)}
+.leftdot.on{border-color:var(--ok);background:var(--ok-soft)}
+.leftdot.on .dot{background:var(--ok);box-shadow:none}
+.leftdot small{font-size:12px;font-weight:700;color:var(--ok);font-variant-numeric:tabular-nums}
+.leftdot:disabled{cursor:default;opacity:1}
 .job-body{padding:12px;display:flex;flex-direction:column;gap:10px}
 label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);min-width:0}
 label.f input,label.f select{text-transform:none;letter-spacing:0;font-weight:400;font-size:15px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
