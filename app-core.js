@@ -472,15 +472,15 @@ function renderRoster(){
   if(document.activeElement!==$('baseAddr'))$('baseAddr').value=S.base;
   $('wCount').textContent=S.workers.length+' fixos';
   $('workers').innerHTML=S.workers.map((w,i)=>`<div class="lrow"><input class="wname" data-wn="${i}" value="${esc(w)}" aria-label="Nome" id="wn-${i}">
-    ${fixedVeh(w)?`<span class="fixveh" title="Carro fixo">${esc(vLabel(fixedVeh(w)))}</span>`:''}
-    <button class="drvtag${isDriverName(w)?' on':''}" data-drv="${i}" aria-pressed="${isDriverName(w)}" title="Motorista / responsável pela obra">🚗<span> Motorista</span></button>
+    <select class="carsel${isDriverName(w)?' on':''}" data-car="${i}" aria-label="Carro que ${esc(w)} dirige" id="car-${i}">
+      <option value="">Não dirige</option><option value="own"${!fixedVeh(w)&&isDriverName(w)?' selected':''}>🚗 Carro próprio</option>
+      ${S.vehicles.filter(v=>v.n).map(v=>`<option value="${esc(v.n)}"${fixedVeh(w)===v.n?' selected':''}>${esc(v.t)} ${esc(v.n)}${v.d&&nkey(v.d)!==nkey(w)?' ('+esc(v.d)+')':''}</option>`).join('')}</select>
     ${P.telefones?'':'<!--'}<input class="wphone${phoneOf(w)&&!waDigits(phoneOf(w))?' bad':''}" data-wp="${esc(w)}" value="${esc(phoneOf(w))}" placeholder="Telefone" inputmode="tel" aria-label="Telefone de ${esc(w)}" id="wp-${i}">${P.telefones?'':'-->'}
     <button class="x" data-wi="${i}" aria-label="Remover ${esc(w)}">×</button></div>`).join('')||'<span class="empty">Nenhum trabalhador cadastrado ainda.</span>';
   $('vehicles').innerHTML=S.vehicles.map((v,i)=>`<div class="lrow">
     <select data-vi="${i}" data-k="t" aria-label="Tipo" id="vt-${i}"><option${v.t==='🛻'?' selected':''}>🛻</option><option${v.t==='🚐'?' selected':''}>🚐</option><option${v.t==='🚚'?' selected':''}>🚚</option></select>
     <input class="vnum" data-vi="${i}" data-k="n" value="${esc(v.n)}" inputmode="numeric" aria-label="Número" id="veh-${i}">
-    <select class="grow" data-vi="${i}" data-k="d" aria-label="Motorista fixo do ${esc(v.n)}" id="vd-${i}"><option value="">Sem motorista fixo</option>${
-      [...new Set([...S.workers,...(v.d?[v.d]:[])])].map(w=>`<option${v.d===w?' selected':''}>${esc(w)}</option>`).join('')}</select>
+    <span class="grow vdrv">${v.d?'Motorista: <b>'+esc(v.d)+'</b>':'<span class="hint">Sem motorista fixo</span>'}</span>
     <button class="x" data-vdel="${i}" aria-label="Remover veículo">×</button></div>`).join('')||'<span class="empty">Nenhum veículo cadastrado.</span>';
   $('companies').innerHTML=Object.keys(S.companies).sort((a,b)=>a.localeCompare(b)).map((c,i)=>`<div class="coblock">
     <div class="cohead"><b>${esc(c)}</b><span class="cocount">${S.companies[c].length} endereço${S.companies[c].length===1?'':'s'}</span>
@@ -489,7 +489,7 @@ function renderRoster(){
     ${S.companies[c].map((a,ai)=>`<div class="lrow"><input class="grow" data-co="${esc(c)}" data-ai="${ai}" value="${esc(a)}" placeholder="Endereço" aria-label="Endereço de ${esc(c)}" id="cad-${i}-${ai}">
       <button class="x" data-adel="${esc(c)}" data-ai="${ai}" aria-label="Remover endereço">×</button></div>`).join('')}
   </div>`).join('')||'<span class="empty">As companhias aparecem aqui conforme você cria obras.</span>';
-  if(!P.cadastro){document.querySelectorAll('#view-roster .wname,#workers [data-wi],#vehicles input,#vehicles select,#vehicles button,#companies input,#companies button,#workers [data-drv],#baseAddr,#newWorker,#addWorker,#addVehicle').forEach(el=>el.disabled=true)}
+  if(!P.cadastro){document.querySelectorAll('#view-roster .wname,#workers [data-wi],#vehicles input,#vehicles select,#vehicles button,#companies input,#companies button,#workers [data-car],#baseAddr,#newWorker,#addWorker,#addVehicle').forEach(el=>el.disabled=true)}
 }
 $('workers').addEventListener('change',e=>{const i=e.target.dataset.wn;if(i==null)return;
   const old=S.workers[+i];const nv=e.target.value.trim().replace(/\s+/g,' ');
@@ -510,12 +510,16 @@ $('workers').addEventListener('change',e=>{const n=e.target.dataset.wp;if(n==nul
   e.target.classList.toggle('bad',!!v&&!waDigits(v));
   if(v&&!waDigits(v))toast('Número parece incompleto. Use o formato (508) 555-1234');
   savePhones();renderNotify()});
+$('workers').addEventListener('change',e=>{const i=e.target.dataset.car;if(i==null)return;if(!P.cadastro)return;
+  const w=S.workers[+i],val=e.target.value;
+  S.drivers=S.drivers.filter(x=>nkey(x)!==nkey(w));
+  S.vehicles.forEach(v=>{if(v.d&&nkey(v.d)===nkey(w))delete v.d});
+  let msg=w+' não dirige';
+  if(val==='own'){S.drivers.push(w);msg=w+': motorista com carro próprio'}
+  else if(val){const v=S.vehicles.find(x=>x.n===val);if(v){if(v.d)msg=v.d+' saiu do '+val+'. '+w+' agora dirige o '+val;else msg=w+' dirige o '+val;v.d=w}}
+  saveRoster();renderRoster();if(P.escala&&D.jobs.length)saveDay();renderJobs();toast(msg);
+});
 $('workers').onclick=e=>{
-  const t=e.target.closest('[data-drv]');
-  if(t){if(!P.cadastro)return;const w=S.workers[+t.dataset.drv];const on=isDriverName(w);
-    if(on&&fixedVeh(w)){toast(w+' é motorista fixo do '+fixedVeh(w)+'. Pra desmarcar, tire ele do carro em Veículos.');return}
-    S.drivers=on?S.drivers.filter(x=>nkey(x)!==nkey(w)):[...S.drivers,w];saveRoster();renderRoster();
-    if(P.escala&&D.jobs.length)saveDay();renderJobs();toast(on?w+' não é mais motorista':w+' marcado como motorista');return}
   const b=e.target.closest('[data-wi]');if(b){const w=S.workers[+b.dataset.wi];S.workers.splice(+b.dataset.wi,1);S.drivers=S.drivers.filter(x=>nkey(x)!==nkey(w));S.vehicles.forEach(v=>{if(v.d&&nkey(v.d)===nkey(w))delete v.d});saveRoster();renderRoster();refresh(false)}};
 function addWorker(){const n=$('newWorker').value.trim();if(n&&!S.workers.some(w=>w.toLowerCase()===n.toLowerCase())){S.workers.push(n);S.workers.sort((a,b)=>a.localeCompare(b,'pt'));saveRoster();renderRoster();refresh(false)}$('newWorker').value='';$('newWorker').focus()}
 $('bulkAdd').onclick=()=>{
@@ -540,9 +544,7 @@ $('bulkAdd').onclick=()=>{
 $('addWorker').onclick=addWorker;$('newWorker').onkeydown=e=>{if(e.key==='Enter')addWorker()};
 $('vehicles').addEventListener('input',e=>{const t=e.target;if(t.dataset.vi!=null){
   const k=t.dataset.k,val=t.value.trim();
-  if(k==='d'&&val){const dup=S.vehicles.find((x,ix)=>ix!==+t.dataset.vi&&x.d===val);if(dup){dup.d='';toast(val+' saiu do '+dup.n+' e agora é motorista do '+(S.vehicles[+t.dataset.vi].n||'carro'))}}
-  if(k==='d'&&!val)delete S.vehicles[+t.dataset.vi].d;else S.vehicles[+t.dataset.vi][k]=val;
-  saveRoster();if(k==='d'){renderRoster();if(P.escala&&D.jobs.length)saveDay();renderJobs()}}});
+  S.vehicles[+t.dataset.vi][k]=val;saveRoster()}});
 $('vehicles').onclick=e=>{const b=e.target.closest('[data-vdel]');if(b){S.vehicles.splice(+b.dataset.vdel,1);saveRoster();renderRoster()}};
 $('addVehicle').onclick=()=>{S.vehicles.push({n:'',t:'🛻'});saveRoster();renderRoster();const el=$('veh-'+(S.vehicles.length-1));if(el)el.focus()};
 $('companies').oninput=e=>{const c=e.target.dataset.co;if(c!=null&&S.companies[c]){S.companies[c][+e.target.dataset.ai]=e.target.value;saveRoster()}};
