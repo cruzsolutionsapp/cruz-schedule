@@ -196,3 +196,12 @@ label.btn{display:inline-flex;align-items:center}
 .bulk textarea{width:100%;margin:8px 0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);color:var(--ink);font:inherit;resize:vertical}
 .bulk code{font-size:13px}
 .no-cadastro #bulkBox{display:none}
+
+/* ---- modo visualização (sem permissão de editar) ---- */
+.viewer-only{display:none}
+.viewer .viewer-only{display:inline-flex}
+.viewer .tabs,.viewer .toolbar,.viewer #alerts,.viewer #jobs,.viewer .free,.viewer #view-roster,.viewer #view-access{display:none!important}
+.viewer .grid{grid-template-columns:1fr!important;max-width:620px;margin:12px auto 0}
+.viewer .preview-col{position:static}
+.viewer .chat{max-height:none}
+.viewer .bubble{font-size:16px}

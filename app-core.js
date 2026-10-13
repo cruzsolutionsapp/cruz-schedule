@@ -3,6 +3,8 @@ function startApp(db,ctx){
 const P=Object.assign({escala:true,apagar:true,cadastro:true,telefones:true,backup:true},(ctx&&ctx.perms)||{});
 const isAdmin=!!(ctx&&ctx.isAdmin);
 ['escala','apagar','cadastro','telefones','backup'].forEach(k=>document.body.classList.toggle('no-'+k,!P[k]));
+const viewer=!P.escala&&!P.cadastro&&!P.apagar;   // só visualiza: mostra apenas a mensagem do dia
+document.body.classList.toggle('viewer',viewer);
 let PH={}, phonesLoaded=false;
 const PHONES='config/phones';
 const ATTIRE='Calca👖|Bota 🥾';
@@ -323,7 +325,8 @@ function renderJobs(){
 function refresh(save=true){
   const {out}=analyze();
   $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('');
-  $('preview').textContent=buildMsg()||'(sem obras)';
+  $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
+  if(viewer)$('msgTitle').innerHTML='Escala <small>'+esc(dateBR())+'</small>';
   const a=assignedSet();const free=S.workers.filter(w=>!a.has(w.toLowerCase()));
   $('free').innerHTML=free.map(w=>`<span class="chip">${esc(w)}</span>`).join('')||'<span class="empty">Todos os fixos estão escalados.</span>';
   $('freeCount').textContent=free.length+' de '+S.workers.length;
@@ -586,6 +589,7 @@ $('importInfo').addEventListener('click',async e=>{
 });
 
 /* ---------- início ---------- */
+if(viewer)tab('day');
 $('date').value=cur;
 S=normRoster(null);
 setStatus('loading');renderJobs();renderRoster();

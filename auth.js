@@ -124,6 +124,7 @@ async function route(u) {
   $('who').textContent = me + (isAdmin ? ' · admin' : '');
   $('tab-access').hidden = !isAdmin;
   $('logout').onclick = () => { try { started && started.flushAll(); } catch (e) {} signOut(auth); };
+  $('logout2').onclick = $('logout').onclick;
   started = window.startApp(dbw, { email: me, isAdmin, perms });
   setupMembers(isAdmin, me);
 }
