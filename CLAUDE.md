@@ -22,6 +22,9 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 
 ## Formato da mensagem do WhatsApp (não mudar sem pedir)
 ```
+Sexta-feira
+10/09        (dia da semana + mês/dia, uma vez no topo)
+
 ✅ Companhia
 Endereço   (ou "(Esperando)")
 🔴 Calca👖|Bota 🥾
