@@ -54,6 +54,16 @@ service cloud.firestore {
     }
 
     // Cadastro: quem edita escala pode salvar endereços novos e tempos de viagem
+    // Pedidos de acesso: a própria pessoa cria o dela; só o admin vê e apaga
+    match /requests/{email} {
+      allow create, update: if signedIn() && email == me()
+        && request.resource.data.email == me()
+        && request.resource.data.keys().hasOnly(['email', 'name', 'at'])
+        && (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() <= 60));
+      allow read: if isAdmin() || (signedIn() && email == me());
+      allow delete: if isAdmin();
+    }
+
     match /config/roster {
       allow read: if isMember();
       allow create: if can('cadastro');

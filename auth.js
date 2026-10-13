@@ -88,6 +88,12 @@ $('gate').addEventListener('click', async e => {
   if (a === 'out') return signOut(auth);
   if (a === 'resend') { await sendEmailVerification(u).catch(() => {}); e.target.textContent = 'Enviado ✓'; return; }
   if (a === 'recheck') { await u.reload(); await u.getIdToken(true); return route(auth.currentUser); }
+  if (a === 'reqname') {
+    const name = ($('reqName').value || '').trim().slice(0, 60);
+    try { await setDoc(doc(fs, 'requests', u.email.toLowerCase()), { email: u.email.toLowerCase(), name, at: serverTimestamp() }, { merge: true }); e.target.textContent = 'Nome salvo ✓'; }
+    catch (err) { e.target.textContent = 'Não salvou'; }
+    return;
+  }
   if (a === 'owner') {
     e.target.disabled = true; e.target.textContent = 'Configurando…';
     try {
@@ -116,8 +122,13 @@ async function route(u) {
       return gate(`<h2>Primeiro acesso do app</h2><p>Ninguém configurou o app ainda. Você (<b>${esc(me)}</b>) vai ser o <b>administrador</b>: é quem libera o acesso dos outros.</p>
         <div class="gbtns"><button class="btn primary" data-g="owner">Sou o administrador</button><button class="linkbtn" data-g="out">Sair</button></div>`);
     }
-    return gate(`<h2>Aguardando liberação</h2><p>Seu e-mail <b>${esc(me)}</b> ainda não foi liberado. Peça pro administrador adicionar você em <b>Cadastro → Acesso</b> e depois toque em "Tentar de novo".</p>
-      <div class="gbtns"><button class="btn primary" data-g="recheck">Tentar de novo</button><button class="linkbtn" data-g="out">Sair</button></div>`);
+    let req = null; try { req = await getDoc(doc(fs, 'requests', me)); } catch (e) {}
+    const name = req && req.exists() ? (req.data().name || '') : '';
+    if (!(req && req.exists())) { try { await setDoc(doc(fs, 'requests', me), { email: me, at: serverTimestamp() }, { merge: true }); } catch (e) { console.error(e); } }
+    return gate(`<h2>Pedido de acesso enviado</h2>
+      <p>Sua conta (<b>${esc(me)}</b>) foi criada e o <b>administrador já recebeu seu pedido</b> no app. Assim que ele aprovar, toque em <b>"Tentar de novo"</b>.</p>
+      <label class="f">Seu nome (pra ele saber quem é)<input id="reqName" value="${esc(name)}" maxlength="60" placeholder="Ex.: Pierre Silva"></label>
+      <div class="gbtns"><button class="btn" data-g="reqname">Salvar nome</button><button class="btn primary" data-g="recheck">Tentar de novo</button><button class="linkbtn" data-g="out">Sair</button></div>`);
   }
   const md = m.data(), isAdmin = md.role === 'admin';
   const perms = {}; PERMS.forEach(([k]) => perms[k] = isAdmin ? true : (md.perms && k in md.perms ? !!md.perms[k] : true));
@@ -190,11 +201,55 @@ function setupMembers(isAdmin, me) {
     try {
       const worker = $('newWorkerLink') ? $('newWorkerLink').value : '';
       await setDoc(doc(fs, 'members', em), { email: em, role, perms, worker, at: serverTimestamp() });
+      deleteDoc(doc(fs, 'requests', em)).catch(() => {});
       $('newMember').value = ''; $('newPerms').innerHTML = permBoxes(NEW_DEFAULT, false, 'np', false);
       msgEl.textContent = 'Liberado! Peça pra pessoa abrir o app e tocar em "Primeiro acesso".';
     } catch (err) { fail(err); }
   };
   $('addMember').onclick = add;
+
+  /* pedidos de acesso: quem criou conta e ainda não foi liberado */
+  let reqs = [];
+  const drawReqs = () => {
+    if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#requests')) return;
+    const n = reqs.length;
+    $('tab-access').textContent = n ? `Acesso (${n})` : 'Acesso';
+    $('reqBanner').hidden = !n;
+    $('reqBanner').innerHTML = n ? `🔔 <b>${n} ${n > 1 ? 'pessoas pedindo' : 'pessoa pedindo'} acesso</b> ao app. <button class="linkbtn" id="reqGo">Ver pedidos</button>` : '';
+    $('reqPanel').hidden = !n;
+    $('requests').innerHTML = reqs.map((r, i) => `<div class="mcard req" data-email="${esc(r.email)}">
+      <div class="mhead"><b>${esc(r.name || r.email)}</b><span class="youtag">${r.at && r.at.toDate ? esc(r.at.toDate().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })) : ''}</span></div>
+      ${r.name ? `<small class="hint">${esc(r.email)}</small>` : ''}
+      ${workerSel('', 'rw' + i)}
+      <div class="perms">${permBoxes(NEW_DEFAULT, false, 'r' + i, false)}</div>
+      <div class="gbtns" style="margin-top:0"><button class="btn primary" data-rok="1">Aprovar</button><button class="btn danger" data-rno="1">Recusar</button></div></div>`).join('');
+  };
+  onSnapshot(collection(fs, 'requests'), s => {
+    const members = new Set(rows.map(r => r.email));
+    reqs = s.docs.map(d => d.data()).filter(r => r.email && !members.has(r.email)).sort((a, b) => ((b.at && b.at.seconds) || 0) - ((a.at && a.at.seconds) || 0));
+    drawReqs();
+  }, () => {});
+  document.addEventListener('click', e => { if (e.target.id === 'reqGo') { $('tab-access').click(); setTimeout(() => $('reqPanel').scrollIntoView({ block: 'start' }), 50); } });
+  $('requests').addEventListener('change', e => { if (e.target.dataset.adm) { const c = e.target.closest('.mcard'); c.querySelectorAll('[data-perm]').forEach(x => { if (e.target.checked) x.checked = true; x.disabled = e.target.checked; }); } });
+  $('requests').addEventListener('click', async e => {
+    const card = e.target.closest('.mcard'); if (!card) return;
+    const email = card.dataset.email;
+    if (e.target.dataset.rok) {
+      const role = card.querySelector('[data-adm]').checked ? 'admin' : 'member';
+      const perms = {}; card.querySelectorAll('[data-perm]').forEach(c => perms[c.dataset.perm] = c.checked);
+      const worker = card.querySelector('[data-worker]').value;
+      e.target.disabled = true; e.target.textContent = 'Aprovando…';
+      try {
+        await setDoc(doc(fs, 'members', email), { email, role, perms, worker, at: serverTimestamp() });
+        await deleteDoc(doc(fs, 'requests', email)).catch(() => {});
+        msgEl.textContent = email + ' aprovado! Avise a pessoa pra tocar em "Tentar de novo".';
+      } catch (err) { fail(err); e.target.disabled = false; e.target.textContent = 'Aprovar'; }
+    }
+    if (e.target.dataset.rno) {
+      if (e.target.dataset.confirm !== '1') { e.target.dataset.confirm = '1'; e.target.textContent = 'Toque de novo pra recusar'; return; }
+      try { await deleteDoc(doc(fs, 'requests', email)); } catch (err) { fail(err); }
+    }
+  });
   $('newMember').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
 }
 

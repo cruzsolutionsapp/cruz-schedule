@@ -255,3 +255,8 @@ body.viewer{padding-bottom:24px}
 .siteinfo{display:flex;flex-direction:column;gap:2px;min-width:0}
 .siteinfo b{font-weight:600;overflow-wrap:anywhere}
 .siteinfo small{color:var(--muted);overflow-wrap:anywhere}
+
+.reqbanner{margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.reqbanner .linkbtn{font-size:14px}
+.reqpanel{border-color:var(--warn)}
+.mcard.req{border-color:var(--hivis)}

@@ -60,6 +60,7 @@
     <button class="tab" role="tab" id="tab-access" aria-selected="false" hidden>Acesso</button>
   </div>
 
+  <div class="alert warn reqbanner" id="reqBanner" hidden></div>
   <section id="view-day">
     <div class="toolbar">
       <button class="btn primary" id="addJob">+ Nova obra</button>
@@ -103,6 +104,11 @@
   </section>
 
   <section id="view-access" hidden>
+    <div class="panel reqpanel" id="reqPanel" hidden style="margin-bottom:14px">
+      <h2>Pedidos de acesso</h2>
+      <p class="hint" style="margin:0 0 10px">Essas pessoas criaram conta no app e estão esperando. Escolha o que cada uma pode fazer e toque em <b>Aprovar</b>.</p>
+      <div class="members" id="requests"></div>
+    </div>
     <div class="panel">
       <h2>Quem pode usar o app</h2>
       <p class="hint" style="margin:0 0 12px">Marque o que cada pessoa pode fazer. Sem nada marcado, a pessoa só <b>vê</b> a escala e copia a mensagem. As mudanças valem na hora (a pessoa só precisa reabrir o app).</p>
