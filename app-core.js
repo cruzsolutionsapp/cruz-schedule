@@ -310,7 +310,11 @@ function vehOptions(sel){return '<option value="">sem veículo</option><option v
 
 /* ---------- render ---------- */
 // recolher/abrir obra: qualquer obra recolhe ao tocar no cabeçalho; despachada já começa recolhida
-const openLeft=new Map();   // jobId -> true (aberta) / false (recolhida), escolha feita na tela
+const openLeft=new Map();
+// ⏱ atraso: obra de hoje, ainda aguardando, depois do horário do shop (conta até despachar)
+function lateMin(j){if(j.left||!j.shop||cur!==iso(new Date()))return 0;const s=new Date(cur+'T'+j.shop+':00').getTime();const m=Math.floor((Date.now()-s)/60000);return m>0?m:0}
+function lateText(j){const m=lateMin(j);if(!m)return '';return '⏱ '+(m<60?m+' min':Math.floor(m/60)+'h'+String(m%60).padStart(2,'0'))+' atrasada'}
+setInterval(()=>{document.querySelectorAll('[data-late]').forEach(el=>{const j=findJob(el.dataset.late);const t=j?lateText(j):'';if(el.textContent!==t)el.textContent=t})},20000);   // jobId -> true (aberta) / false (recolhida), escolha feita na tela
 const isCollapsed=j=>openLeft.has(j.id)?!openLeft.get(j.id):!!j.left;
 function renderJobs(){
   if(!dayLoaded||(mode==='cloud'&&!rosterLoaded)){$('jobs').innerHTML='<div class="panel empty">Carregando a escala…</div>';$('alerts').innerHTML='';$('preview').textContent='';$('stats').textContent='';return}
@@ -341,6 +345,7 @@ function renderJobs(){
         <input data-f="company" list="companyList" value="${esc(j.company)}" placeholder="Companhia" aria-label="Companhia" id="co-${j.id}">
         <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span></button>${j.left?'<span class="wkbadge sentbadge">Despachada</span>':'<span class="wkbadge waitbadge">Aguardando</span>'}
         <span class="wkbadge" ${j.allWeek?'':'hidden'}>All Week</span>
+        <span class="latetimer" data-late="${j.id}">${lateText(j)}</span>
         <button class="icon-btn" data-act="up" aria-label="Subir">↑</button>
         <button class="icon-btn" data-act="down" aria-label="Descer">↓</button>
       </div>

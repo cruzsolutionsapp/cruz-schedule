@@ -448,3 +448,6 @@ body.viewer{padding-bottom:24px}
 .job-head{cursor:pointer}
 .job-head .chev{cursor:pointer;font-size:16px;width:22px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px}
 .job-head .chev:hover{background:var(--line)}
+
+.latetimer{flex:none;font-size:13px;font-weight:700;color:var(--bad);background:var(--bad-soft);border-radius:999px;padding:2px 9px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.latetimer:empty{display:none}
