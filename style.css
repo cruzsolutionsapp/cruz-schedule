@@ -385,4 +385,4 @@ body.viewer{padding-bottom:24px}
 @media (max-width:520px){.srow{flex-direction:column;gap:2px}.sdate{width:auto}}
 
 .searchtab{margin-left:auto;align-self:center;margin-bottom:6px;padding:6px 14px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
-.searchtab[aria-selected="true"]{background:var(--hivis);border-color:var(--hivis);color:var(--hivis-ink)}
+.searchtab[aria-selected="true"]{box-shadow:0 0 0 3px var(--hivis-soft)}
