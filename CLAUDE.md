@@ -22,7 +22,7 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - Link de demonstração: `…/cruz-schedule/#demo` abre sem login, com dados inventados num banco em memória (`memDb`/`demoSeed` em auth.js). Nada é salvo nem lê dados reais.
 - Aba 🔍 Buscar: busca em `days` (e presença em `attendance`) por funcionário, companhia ou endereço, com período (7/30/90/365 dias ou datas). Sem acento/maiúscula. Clicar no resultado abre o dia e destaca a obra. Baixa .csv (perm backup).
 - Aba 📅 Calendário: mês com as obras de cada dia (lê `days` do intervalo, ao vivo). "+ Agendamento" grava a obra direto em `days/AAAA-MM-DD` (equipe vazia, `need` = quantas pessoas; repetir até X pulando fim de semana; All Week). Livres = total de `workers` − soma de max(need, equipe). No dia só aparece uma bolinha de cor (verde/laranja ≥85%/vermelho acima); os números aparecem no topo (#calInfo) ao passar o mouse, e no painel do dia ao tocar.
-- Relatório do dia (painel na coluna da direita): resumo com obras, despachadas (hora e atraso), escalados/presentes/faltas e nomes de quem faltou (de `attendance`); botão abre WhatsApp no `roster.boss`.
+- Relatório do dia (painel na coluna da direita): resumo com obras, despachadas (só a hora de saída, sem atraso), escalados/presentes/faltas e nomes de quem faltou (de `attendance`); botão abre WhatsApp no `roster.boss`.
 
 ## Formato da mensagem do WhatsApp (não mudar sem pedir)
 ```
