@@ -435,3 +435,10 @@ body.viewer{padding-bottom:24px}
 .cdfreenames{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
 .cdfreenames small{color:var(--muted);font-weight:400}
 .cdfreenames .chips{display:flex;flex-wrap:wrap;gap:6px}
+
+/* obra despachada recolhida */
+.job.collapsed .job-head{border-bottom:0;cursor:pointer}
+.job.collapsed .job-head input{cursor:pointer;pointer-events:auto}
+.job.collapsed{opacity:.9}
+.chev{color:var(--muted);font-size:14px;width:12px;flex:none}
+.job:has(.leftdot.on) .job-head{cursor:pointer}

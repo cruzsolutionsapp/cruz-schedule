@@ -304,6 +304,8 @@ function needText(j){const n=j.crew.length;if(!j.need)return n+(n===1?' pessoa':
 function vehOptions(sel){return '<option value="">sem veículo</option><option value="own"'+(sel===OWN?' selected':'')+'>🚗 carro próprio</option>'+S.vehicles.filter(v=>v.n).map(v=>`<option value="${esc(v.n)}"${v.n===sel?' selected':''}>${esc(v.t)} ${esc(v.n)}</option>`).join('')}
 
 /* ---------- render ---------- */
+// obras com a turma já despachada (bolinha verde) ficam recolhidas; tocar no cabeçalho abre/fecha
+const openLeft=new Set();
 function renderJobs(){
   if(!dayLoaded||(mode==='cloud'&&!rosterLoaded)){$('jobs').innerHTML='<div class="panel empty">Carregando a escala…</div>';$('alerts').innerHTML='';$('preview').textContent='';$('stats').textContent='';return}
   const {dupNames}=analyze();
@@ -326,16 +328,17 @@ function renderJobs(){
         <div class="extra"><input id="extra-${j.id}" placeholder="Nome extra (não cadastrado)"><button class="btn" data-act="extra">Adicionar</button></div>
         <button class="btn" data-act="pickclose">Pronto</button></div>`;
     }
-    return `<article class="job" data-id="${j.id}">
+    const collapsed=!!j.left&&!openLeft.has(j.id);
+    return `<article class="job${collapsed?' collapsed':''}" data-id="${j.id}">
       <div class="job-head">
-        <span class="num">${i+1}</span>
+        <span class="num">${i+1}</span>${j.left?`<span class="chev" aria-hidden="true">${collapsed?'▸':'▾'}</span>`:''}
         <input data-f="company" list="companyList" value="${esc(j.company)}" placeholder="Companhia" aria-label="Companhia" id="co-${j.id}">
         <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span></button>
         <span class="wkbadge" ${j.allWeek?'':'hidden'}>All Week</span>
         <button class="icon-btn" data-act="up" aria-label="Subir">↑</button>
         <button class="icon-btn" data-act="down" aria-label="Descer">↓</button>
       </div>
-      <div class="job-body">
+      <div class="job-body"${collapsed?' hidden':''}>
         <label class="f">Endereço<input data-f="address" value="${esc(j.address)}" ${j.waiting?'disabled':''} placeholder="${j.office?'Endereço do office/shop da companhia':'Rua, cidade, MA'}" id="ad-${j.id}"></label>
         <div class="apick" id="ap-${j.id}">${addrPickHTML(j)}</div>
         <div class="travel" id="tv-${j.id}">${travelHTML(j)}</div>
@@ -424,6 +427,14 @@ $('jobs').addEventListener('change',e=>{
   if(f==='office'&&j.office&&j.address.trim())rememberAddr(j);
   if(f==='address'||f==='company'||f==='waiting'||f==='office')lookupTravel(j);
 });
+$('jobs').addEventListener('click',e=>{
+  if(e.target.closest('[data-act]'))return;
+  const head=e.target.closest('.job-head');if(!head)return;
+  const card=head.closest('.job');const j=findJob(card.dataset.id);if(!j||!j.left)return;
+  if(e.target.tagName==='INPUT'&&!card.classList.contains('collapsed'))return;   // aberto: clicar no nome é pra editar
+  if(openLeft.has(j.id))openLeft.delete(j.id);else openLeft.add(j.id);
+  e.preventDefault();if(document.activeElement)document.activeElement.blur();renderJobs();
+});
 $('jobs').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id&&e.target.id.startsWith('extra-')){e.preventDefault();e.target.nextElementSibling.click()}});
 $('jobs').addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b||b.tagName==='SELECT')return;
@@ -441,7 +452,7 @@ $('jobs').addEventListener('click',e=>{
   else if(act==='extra'){const inp=$('extra-'+j.id);const n=fmtName(inp.value);if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:''})}
   else if(act==='up'&&i>0){jobs.splice(i,1);jobs.splice(i-1,0,j)}
   else if(act==='down'&&i<jobs.length-1){jobs.splice(i,1);jobs.splice(i+1,0,j)}
-  else if(act==='left'){j.left=j.left?0:Date.now();if(j.left&&j.allWeek){saveDay();copyJobToNext(j,b)}}   // All Week: ao confirmar a saída, já vai pro dia seguinte
+  else if(act==='left'){j.left=j.left?0:Date.now();openLeft.delete(j.id);if(j.left&&j.allWeek){saveDay();copyJobToNext(j,b)}}   // All Week: ao confirmar a saída, já vai pro dia seguinte
   else if(act==='auto'){j.autoShop=true;recompute(j)}
   else if(act==='early'){j.early=+b.dataset.m;recompute(j)}
   else if(act==='calc'){lookupTravel(j);return}
