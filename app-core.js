@@ -333,7 +333,7 @@ function renderJobs(){
       <div class="job-head">
         <span class="num">${i+1}</span>${j.left?`<span class="chev" aria-hidden="true">${collapsed?'▸':'▾'}</span>`:''}
         <input data-f="company" list="companyList" value="${esc(j.company)}" placeholder="Companhia" aria-label="Companhia" id="co-${j.id}">
-        <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span></button>${j.left?'<span class="wkbadge sentbadge">Despachada</span>':''}
+        <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span></button>${j.left?'<span class="wkbadge sentbadge">Despachada</span>':'<span class="wkbadge waitbadge">Aguardando</span>'}
         <span class="wkbadge" ${j.allWeek?'':'hidden'}>All Week</span>
         <button class="icon-btn" data-act="up" aria-label="Subir">↑</button>
         <button class="icon-btn" data-act="down" aria-label="Descer">↓</button>

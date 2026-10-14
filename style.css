@@ -443,3 +443,4 @@ body.viewer{padding-bottom:24px}
 .chev{color:var(--muted);font-size:14px;width:12px;flex:none}
 .job:has(.leftdot.on) .job-head{cursor:pointer}
 .sentbadge{flex:none}
+.waitbadge{flex:none;background:var(--bad);color:var(--surface)}
