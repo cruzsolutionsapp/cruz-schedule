@@ -145,7 +145,7 @@ label.f input:disabled{background:var(--sunk);color:var(--muted)}
 .bar .in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:10px}
 .bar .stats{flex:1;min-width:0;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
 .bar .stats b{color:var(--ink)}
-.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);max-width:calc(100vw - 32px);text-align:center;background:var(--ink);color:var(--surface);padding:8px 16px;border-radius:999px;font-size:14px;z-index:6}
+.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:8px 16px;border-radius:999px;font-size:14px;z-index:6}
 
 .roster{display:grid;grid-template-columns:1fr;gap:14px}
 @media (min-width:900px){.roster{grid-template-columns:1fr 1fr}}
@@ -577,10 +577,3 @@ body.viewer{padding-bottom:24px}
 .statlink.warn{color:var(--warn)} .statlink.bad{color:var(--bad)}
 @keyframes flashp{0%{box-shadow:0 0 0 3px var(--hivis)}100%{box-shadow:0 0 0 0 transparent}}
 .flash{animation:flashp 1.6s ease-out}
-/* celular: nada mais largo que a tela (coluna única não estica; abas rolam de lado) */
-.grid{grid-template-columns:minmax(0,1fr)}
-.tabs{overflow-x:auto;scrollbar-width:none}
-.tabs::-webkit-scrollbar{display:none}
-.tabs .tab{flex:none}
-@media (max-width:600px){.job-head{flex-wrap:wrap;row-gap:6px}.job-head input{flex:1 1 calc(100% - 80px)}}
-@media (max-width:600px){body{padding-bottom:150px}.toast{bottom:130px;border-radius:14px}}
