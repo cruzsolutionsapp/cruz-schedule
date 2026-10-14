@@ -8,7 +8,7 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - `index.html` — telas (login, portão de acesso, app). `style.css` — estilos (tokens de cor no topo, tema claro/escuro).
 - `app-core.js` — toda a lógica do schedule (script clássico; expõe `window.startApp(db, ctx)`). Usa um adaptador `db.doc(path).set/get/onSnapshot` e `db.collection(path).where/orderBy/limit/get`.
 - `auth.js` — módulo ES: Firebase, login, verificação de e-mail, lista de acesso (`members`), adaptador do banco, registro do service worker.
-- `sw.js` — offline. **Ao mudar arquivos do app, aumente `VERSION` em `sw.js`.**
+- `sw.js` — offline. **Ao mudar arquivos do app, aumente `VERSION` em `sw.js`.** Arquivos do app: rede primeiro com `?_=hora` (fura o cache de até 10 min do CDN do GitHub Pages); offline usa o cache.
 - `firestore.rules` — regras de segurança. Não são publicadas automaticamente: o usuário cola no Console do Firebase → Firestore → Regras.
 
 ## Dados (Firestore)
