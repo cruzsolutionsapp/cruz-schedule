@@ -582,3 +582,5 @@ body.viewer{padding-bottom:24px}
 /* Fora do schedule: todos os nomes na mesma altura e alinhados (emoji ❌ não aumenta a altura) */
 #free{align-items:center}
 #free .chip{display:inline-flex;align-items:center;gap:4px;height:30px;line-height:1;box-sizing:border-box;white-space:nowrap}
+/* aviso de versão nova */
+.updbar{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:70;background:var(--hivis);color:var(--hivis-ink);border:0;border-radius:999px;padding:10px 18px;font:inherit;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;max-width:calc(100vw - 24px)}

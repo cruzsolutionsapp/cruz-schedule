@@ -59,7 +59,7 @@ const savePhones=()=>P.telefones&&queue(PHONES,{phones:PH});
 window.addEventListener('pagehide',flushAll);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)flushAll()});
 
-function normRoster(d){return {workers:Array.isArray(d&&d.workers)?[...d.workers]:[],vehicles:Array.isArray(d&&d.vehicles)?clone(d.vehicles):[],companies:(()=>{const o={};if(d&&d.companies&&typeof d.companies==='object')Object.keys(d.companies).forEach(k=>{const v=d.companies[k];
+function normRoster(d){return {workers:Array.isArray(d&&d.workers)?[...d.workers]:[],vehicles:Array.isArray(d&&d.vehicles)?clone(d.vehicles).map(v=>v&&v.t==='🚚'?Object.assign(v,{t:'🚛'}):v):[],companies:(()=>{const o={};if(d&&d.companies&&typeof d.companies==='object')Object.keys(d.companies).forEach(k=>{const v=d.companies[k];
     o[k]=Array.isArray(v)?v.filter(x=>typeof x==='string'):(typeof v==='string'&&v.trim()?[v]:[])});return o})(),
   base:(d&&typeof d.base==='string'&&d.base.trim())?d.base:'599 Concord St, Holliston, MA 01746',
   buffer:(d&&Number.isFinite(d.buffer))?d.buffer:30,
@@ -610,7 +610,7 @@ function renderRoster(){
     ${P.telefones?'':'<!--'}<input class="wphone${phoneOf(w)&&!waDigits(phoneOf(w))?' bad':''}" data-wp="${esc(w)}" value="${esc(phoneOf(w))}" placeholder="Telefone" inputmode="tel" aria-label="Telefone de ${esc(w)}" id="wp-${i}">${P.telefones?'':'-->'}
     <button class="x" data-wi="${i}" aria-label="Remover ${esc(w)}">×</button></div>`).join('')||'<span class="empty">Nenhum trabalhador cadastrado ainda.</span>';
   $('vehicles').innerHTML=S.vehicles.map((v,i)=>`<div class="lrow">
-    <select data-vi="${i}" data-k="t" aria-label="Tipo" id="vt-${i}"><option${v.t==='🛻'?' selected':''}>🛻</option><option${v.t==='🚐'?' selected':''}>🚐</option><option${v.t==='🚚'?' selected':''}>🚚</option><option${v.t==='🚗'?' selected':''}>🚗</option></select>
+    <select data-vi="${i}" data-k="t" aria-label="Tipo" id="vt-${i}"><option${v.t==='🛻'?' selected':''}>🛻</option><option${v.t==='🚐'?' selected':''}>🚐</option><option${v.t==='🚛'?' selected':''}>🚛</option><option${v.t==='🚗'?' selected':''}>🚗</option></select>
     <input class="vnum" data-vi="${i}" data-k="n" value="${esc(v.n)}" inputmode="numeric" aria-label="Número" id="veh-${i}">
     <select class="grow vdsel" data-vi="${i}" data-k="d" aria-label="Motorista fixo do ${esc(v.n)}" id="vd-${i}"><option value="">Sem motorista fixo</option>${
       [...new Set([...S.workers,...(v.d?[v.d]:[])])].map(w=>`<option${v.d===w?' selected':''}>${esc(w)}</option>`).join('')}</select>
@@ -737,7 +737,7 @@ $('bkDays').onclick=async e=>{
 $('bkRoster').onclick=async e=>{
   const rows=[['Tipo','Nome / Número','Detalhe']];
   S.workers.forEach(w=>rows.push(['Trabalhador',w,phoneOf(w)]));
-  S.vehicles.forEach(v=>rows.push(['Veículo',v.n,v.t==='🚐'?'Van':v.t==='🚚'?'Caminhão':v.t==='🚗'?'Carro':'Pickup']));
+  S.vehicles.forEach(v=>rows.push(['Veículo',v.n,v.t==='🚐'?'Van':v.t==='🚛'?'Caminhão':v.t==='🚗'?'Carro':'Pickup']));
   Object.keys(S.companies).sort().forEach(c=>{const l=S.companies[c].filter(Boolean);(l.length?l:['']).forEach(a=>rows.push(['Companhia',c,a]))});
   await offer('cadastro-backup-'+iso(new Date())+'.csv',toCSV(rows),e.currentTarget);
 };
@@ -1078,8 +1078,12 @@ function watchNextDays(){
 let appVer=null;
 async function swVersion(){try{const r=await fetch('sw.js?v='+Date.now(),{cache:'no-store'});const m=(await r.text()).match(/VERSION\s*=\s*'([^']+)'/);return m?m[1]:null}catch(e){return null}}
 swVersion().then(v=>{appVer=v});
-setInterval(async()=>{if(!centralOn)return;const v=await swVersion();if(!v)return;if(!appVer){appVer=v;return}
-  if(v!==appVer&&!cUnlocked&&!cDetail&&$('cPin').hidden)location.reload()},300000);
+async function checkUpdate(){const v=await swVersion();if(!v)return;if(!appVer){appVer=v;return}if(v===appVer)return;
+  if(centralOn){if(!cUnlocked&&!cDetail&&$('cPin').hidden)location.reload();return}
+  if(!$('updBar')){const b=document.createElement('button');b.id='updBar';b.className='updbar';b.textContent='🔄 Saiu uma versão nova do app · toque aqui pra atualizar';b.onclick=()=>{flushAll();location.reload()};document.body.appendChild(b)}}
+setInterval(()=>{if(centralOn)checkUpdate()},300000);          // Central: a cada 5 min
+setInterval(()=>{if(!centralOn)checkUpdate()},120000);         // app normal: a cada 2 min mostra o aviso
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkUpdate()});
 /* Central: um PIN (guardado só neste aparelho) destrava despachar, presença e abrir o editor. Tranca sozinha após 1 min parado. */
 const cOpen=new Set();let cPage=0,cPages=1,cDetail=null,cKinds=[],CNEXT={};let cUnlocked=false,cIdle=null,pinBuf='',pinStage='enter',pinFirst='',cBackIdle=null;
 const PINKEY='centralPin'+(ctx&&ctx.email==='demo@exemplo'?'-demo':'');
