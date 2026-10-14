@@ -417,7 +417,10 @@ function refresh(save=true){
   const people=D.jobs.reduce((s,j)=>s+j.crew.length,0);
   const bad=out.filter(o=>o[0]!=='ok').length;
   const needed=D.jobs.reduce((s,j)=>s+Math.max(j.need||0,j.crew.length),0);
-  $('stats').innerHTML=`<b>${D.jobs.length}</b> obras · <b>${people}</b>${needed>people?' de <b>'+needed+'</b>':''} pessoas${bad?` · <b style="color:var(--bad)">${bad} aviso${bad>1?'s':''}</b>`:''}`;
+  const asg=assignedSet(),semObra=S.workers.filter(w=>!asg.has(w.toLowerCase())&&!isOff(w)).length;
+  $('stats').innerHTML=`<b>${D.jobs.length}</b> obras · <b>${people}</b>${needed>people?' de <b>'+needed+'</b>':''} pessoas`
+    +(S.workers.length&&D.jobs.length?(semObra?` · <button class="statlink warn" data-go="free">👷 <b>${semObra}</b> sem obra</button>`:` · <span style="color:var(--ok)">✓ todos encaixados</span>`):'')
+    +(bad?` · <button class="statlink bad" data-go="alerts"><b>${bad}</b> aviso${bad>1?'s':''}</button>`:'');
   if(save)saveDay();
 }
 
@@ -565,6 +568,7 @@ $('bringWeek').onclick=async()=>{
 };
 $('clearDay').onclick=()=>{if(!P.apagar)return;if(confirmClear){D.jobs=[];D.sent={};confirmClear=false;$('clearDay').textContent='Limpar dia';saveDay();renderJobs()}else{confirmClear=true;$('clearDay').textContent='Toque de novo pra limpar'}};
 
+$('stats').addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;if(b.dataset.go==='free'){const asg=assignedSet();const n=S.workers.filter(w=>!asg.has(w.toLowerCase())&&!isOff(w));toast('👷 Sem obra: '+n.join(', '),6000);if(innerWidth<900)return}const el0=$(b.dataset.go),el=el0&&(el0.closest('.panel')||el0);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});const p=el.closest('.panel')||el;p.classList.remove('flash');void p.offsetWidth;p.classList.add('flash')}});
 /* ---------- data ---------- */
 function setDate(d){flushAll();cur=d;$('date').value=d;openPick=null;confirmDel=null;confirmClear=false;$('clearDay').textContent='Limpar dia';watchDay()}
 $('date').onchange=e=>{if(e.target.value)setDate(e.target.value)};
@@ -572,7 +576,7 @@ const shift=n=>{const[y,m,d]=cur.split('-').map(Number);setDate(iso(new Date(y,m
 $('prevDay').onclick=()=>shift(-1);$('nextDay').onclick=()=>shift(1);
 
 /* ---------- copiar ---------- */
-function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2200)}
+function toast(t,ms){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,ms||2200)}
 $('copyMsg').onclick=()=>{
   const txt=buildMsg();if(!txt){toast('Não tem obra pra copiar');return}
   const fb=()=>{const ta=$('fallback');ta.value=txt;ta.select();try{document.execCommand('copy');toast('Mensagem copiada')}catch(e){toast('Selecione o texto da prévia e copie')}};
