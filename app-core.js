@@ -1102,8 +1102,12 @@ function renderCentral(){
   let esc_=0,pres=0,falt=0;
   jobs.forEach(j=>{esc_+=j.crew.length;j.crew.forEach(c=>{const st=attOf(j,c.name);if(st==='in')pres++;else if(st==='out')falt++})});
   const desp=jobs.filter(j=>j.left).length;
+  let nd=null;for(let i=1;i<=4&&!nd;i++){const d=new Date();d.setDate(d.getDate()+i);const ds=iso(d);const js=((CNEXT[ds]||{}).jobs||[]).filter(j=>j.company||(j.crew||[]).length);if(js.length)nd={ds,i,js}}
+  const onlyT=!!nd&&new Date().getHours()>=15;   // depois das 3 da tarde: só o próximo dia
   const pill=(n,k,c)=>`<div class="cpill${c?' '+c:''}"><b>${n}</b><span>${k}</span></div>`;
-  $('cStats').innerHTML=pill(jobs.length,jobs.length===1?'obra':'obras')+pill(desp+'/'+jobs.length,'despachadas',jobs.length&&desp===jobs.length?'ok':'')
+  if(onlyT){const tj=nd.js,need=tj.reduce((n,j)=>n+Math.max(+j.need||0,(j.crew||[]).length),0),has=tj.reduce((n,j)=>n+(j.crew||[]).length,0),vag=tj.reduce((n,j)=>n+Math.max(0,(+j.need||0)-(j.crew||[]).length),0);
+    $('cStats').innerHTML=pill(tj.length,(nd.i===1?'obras amanhã':'obras no próximo dia'))+pill(has+'/'+need,'pessoas escaladas',vag?'':'ok')+(vag?pill(vag,vag===1?'vaga aberta':'vagas abertas','bad'):'')}
+  else $('cStats').innerHTML=pill(jobs.length,jobs.length===1?'obra':'obras')+pill(desp+'/'+jobs.length,'despachadas',jobs.length&&desp===jobs.length?'ok':'')
     +((pres||falt)?pill(pres+'/'+esc_,'presentes','ok'):'')+pill(falt,falt===1?'falta':'faltas',falt?'bad':'');
   const name=j=>esc(tidy(j.company)||'Obra');
   const city=j=>{if(j.waiting||!j.address)return '(Esperando endereço)';const p=fmtAddress(j.address).split(',');return esc((p[1]||p[0]||'').trim())};
@@ -1132,15 +1136,14 @@ function renderCentral(){
   else $('cDet').hidden=true;
   const body=$('cBody');
   // próximo dia de trabalho (amanhã; se o fim de semana estiver vazio, pula pra segunda)
-  let nd=null;for(let i=1;i<=4&&!nd;i++){const d=new Date();d.setDate(d.getDate()+i);const ds=iso(d);const js=((CNEXT[ds]||{}).jobs||[]).filter(j=>j.company||(j.crew||[]).length);if(js.length)nd={ds,i,js}}
-  const showT=!!nd&&(new Date().getHours()>=12||!jobs.length||desp===jobs.length);
+  const showT=!!nd&&(onlyT||new Date().getHours()>=12||!jobs.length||desp===jobs.length);
   const w=body.clientWidth,cols=w>=1300?3:w>=720?2:1,gap=12;
   const tile=j=>{const st=stOf(j);return `<div class="ctile2 ${st}" data-cd="${j.id}"><div class="t2h"><span class="cdot2"></span><b>${name(j)}</b><span class="t2p">${people(j)} 👷</span></div>
     <div class="t2s">${badge(j)}<span class="t2w">${when(j)}</span></div><div class="t2m">${subOf(j)||'&nbsp;'}</div></div>`};
   const grid=arr=>`<div class="cgrid" style="--cols:${cols}">${arr.join('')}</div>`;
   const pages=[];let th=0;
   const measure=html=>{body.innerHTML=html;const t=body.querySelector('.ctile2');return t?t.offsetHeight:0};
-  if(list.length){
+  if(list.length&&!onlyT){
     body.innerHTML='<div class="crows">'+list.map(j=>{const st=stOf(j),open=cOpen.has(j.id);
       return `<div class="crow ${st}${open?' open':''}"><div class="crl" data-cj="${j.id}"><span class="cdot2"></span><div class="cn">${name(j)}<small>${subOf(j)}</small></div>
         <div class="ct">${when(j)}</div>${badge(j)}<div class="cc">${people(j)}<small>pessoas</small></div></div>${open?crewList(j)+actions(j):''}</div>`}).join('')+'</div>'+hint;
