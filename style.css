@@ -579,3 +579,6 @@ body.viewer{padding-bottom:24px}
 .flash{animation:flashp 1.6s ease-out}
 .ackbtn{margin:2px 0 4px;font-weight:600}
 .ackinfo{display:block;color:var(--muted);margin:2px 0 6px}
+/* Fora do schedule: todos os nomes na mesma altura e alinhados (emoji ❌ não aumenta a altura) */
+#free{align-items:center}
+#free .chip{display:inline-flex;align-items:center;gap:4px;height:30px;line-height:1;box-sizing:border-box;white-space:nowrap}
