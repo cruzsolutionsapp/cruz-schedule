@@ -1001,6 +1001,18 @@ $('tSearch').addEventListener('input',renderTotem);
 $('tExit').onclick=closeTotem;
 if($('openTotem')){$('openTotem').hidden=!P.escala||!!(ctx&&ctx.totem);$('openTotem').onclick=openTotem}
 
+/* ---------- abrir o WhatsApp direto no app (pula a página do site) ----------
+   Troca https://api.whatsapp.com/send?... por whatsapp://send?... ; se o app não abrir em ~1,5s, cai no site. */
+document.addEventListener('click',e=>{
+  const a=e.target.closest('a[href^="https://api.whatsapp.com/send"]');if(!a||e.defaultPrevented&&!a.dataset.sent)return;
+  const web=a.href,app='whatsapp://send?'+web.split('?')[1];
+  e.preventDefault();
+  let left=false;const onHide=()=>{if(document.hidden)left=true};document.addEventListener('visibilitychange',onHide);
+  window.addEventListener('blur',()=>{left=true},{once:true});
+  try{window.location.href=app}catch(err){}
+  setTimeout(()=>{document.removeEventListener('visibilitychange',onHide);if(!left)window.open(web,'_blank','noopener')},1500);
+},true);
+
 /* ---------- Relatório do dia (pro patrão) ---------- */
 const hm=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
 function buildReport(){
