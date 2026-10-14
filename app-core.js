@@ -309,8 +309,9 @@ function needText(j){const n=j.crew.length;if(!j.need)return n+(n===1?' pessoa':
 function vehOptions(sel){return '<option value="">sem veículo</option><option value="own"'+(sel===OWN?' selected':'')+'>🚗 carro próprio</option>'+S.vehicles.filter(v=>v.n).map(v=>`<option value="${esc(v.n)}"${v.n===sel?' selected':''}>${esc(v.t)} ${esc(v.n)}</option>`).join('')}
 
 /* ---------- render ---------- */
-// obras com a turma já despachada (bolinha verde) ficam recolhidas; tocar no cabeçalho abre/fecha
-const openLeft=new Set();
+// recolher/abrir obra: qualquer obra recolhe ao tocar no cabeçalho; despachada já começa recolhida
+const openLeft=new Map();   // jobId -> true (aberta) / false (recolhida), escolha feita na tela
+const isCollapsed=j=>openLeft.has(j.id)?!openLeft.get(j.id):!!j.left;
 function renderJobs(){
   if(!dayLoaded||(mode==='cloud'&&!rosterLoaded)){$('jobs').innerHTML='<div class="panel empty">Carregando a escala…</div>';$('alerts').innerHTML='';$('preview').textContent='';$('stats').textContent='';return}
   const {dupNames}=analyze();
@@ -333,10 +334,10 @@ function renderJobs(){
         <div class="extra"><input id="extra-${j.id}" placeholder="Nome extra (não cadastrado)"><button class="btn" data-act="extra">Adicionar</button></div>
         <button class="btn" data-act="pickclose">Pronto</button></div>`;
     }
-    const collapsed=!!j.left&&!openLeft.has(j.id);
+    const collapsed=isCollapsed(j);
     return `<article class="job${collapsed?' collapsed':''}" data-id="${j.id}">
       <div class="job-head">
-        <span class="num">${i+1}</span>${j.left?`<span class="chev" aria-hidden="true">${collapsed?'▸':'▾'}</span>`:''}
+        <span class="num">${i+1}</span><span class="chev" title="${collapsed?'Abrir':'Recolher'}" aria-hidden="true">${collapsed?'▸':'▾'}</span>
         <input data-f="company" list="companyList" value="${esc(j.company)}" placeholder="Companhia" aria-label="Companhia" id="co-${j.id}">
         <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span></button>${j.left?'<span class="wkbadge sentbadge">Despachada</span>':'<span class="wkbadge waitbadge">Aguardando</span>'}
         <span class="wkbadge" ${j.allWeek?'':'hidden'}>All Week</span>
@@ -435,9 +436,9 @@ $('jobs').addEventListener('change',e=>{
 $('jobs').addEventListener('click',e=>{
   if(e.target.closest('[data-act]'))return;
   const head=e.target.closest('.job-head');if(!head)return;
-  const card=head.closest('.job');const j=findJob(card.dataset.id);if(!j||!j.left)return;
+  const card=head.closest('.job');const j=findJob(card.dataset.id);if(!j)return;
   if(e.target.tagName==='INPUT'&&!card.classList.contains('collapsed'))return;   // aberto: clicar no nome é pra editar
-  if(openLeft.has(j.id))openLeft.delete(j.id);else openLeft.add(j.id);
+  openLeft.set(j.id,isCollapsed(j));
   e.preventDefault();if(document.activeElement)document.activeElement.blur();renderJobs();
 });
 $('jobs').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id&&e.target.id.startsWith('extra-')){e.preventDefault();e.target.nextElementSibling.click()}});

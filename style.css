@@ -441,8 +441,10 @@ body.viewer{padding-bottom:24px}
 .job.collapsed .job-head input{cursor:pointer;pointer-events:auto}
 .job.collapsed{opacity:.9}
 .chev{color:var(--muted);font-size:14px;width:12px;flex:none}
-.job:has(.leftdot.on) .job-head{cursor:pointer}
 .sentbadge{flex:none}
 .waitbadge{flex:none;background:var(--bad);color:var(--surface)}
 .vnum{width:64px;flex:none}
 .vdsel{min-width:0}
+.job-head{cursor:pointer}
+.job-head .chev{cursor:pointer;font-size:16px;width:22px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px}
+.job-head .chev:hover{background:var(--line)}
