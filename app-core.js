@@ -404,8 +404,12 @@ function renderJobs(){
 }
 function refresh(save=true){
   if(!$('view-cal').hidden){renderCal();if(calSel)renderCalDay()}
-  const {out}=analyze();
-  $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('');
+  const {out:all}=analyze();
+  // avisos amarelos conferidos (guardado neste aparelho, por dia): somem até aparecer um aviso novo
+  const ack=ackGet(),out=all.filter(o=>!(o[0]==='warn'&&ack.includes(o[1]))),nAck=all.length-out.length,nWarn=out.filter(o=>o[0]==='warn').length;
+  $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('')
+    +(nWarn&&!viewer?`<button class="linkbtn ackbtn" id="ackAlerts">✓ Já conferi os avisos amarelos</button>`:'')
+    +(nAck?`<small class="ackinfo">${nAck} aviso${nAck>1?'s':''} já conferido${nAck>1?'s':''} · <button class="linkbtn" id="ackUndo">mostrar de novo</button></small>`:'');
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
   if(viewer)$('msgTitle').innerHTML='Escala <small>'+esc(dateBR())+'</small>';
   const a=assignedSet();const free=S.workers.filter(w=>!a.has(w.toLowerCase())&&!isOff(w));const offs=Object.keys(OFF);
@@ -569,6 +573,14 @@ $('bringWeek').onclick=async()=>{
 $('clearDay').onclick=()=>{if(!P.apagar)return;if(confirmClear){D.jobs=[];D.sent={};confirmClear=false;$('clearDay').textContent='Limpar dia';saveDay();renderJobs()}else{confirmClear=true;$('clearDay').textContent='Toque de novo pra limpar'}};
 
 $('stats').addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;if(b.dataset.go==='free'){const asg=assignedSet();const n=S.workers.filter(w=>!asg.has(w.toLowerCase())&&!isOff(w));toast('👷 Fora do schedule: '+n.join(', '),6000);if(innerWidth<900)return}const el0=$(b.dataset.go),el=el0&&(el0.closest('.panel')||el0);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});const p=el.closest('.panel')||el;p.classList.remove('flash');void p.offsetWidth;p.classList.add('flash')}});
+const ackKey=()=>'ackAlerts-'+cur;
+function ackGet(){try{return JSON.parse(localStorage.getItem(ackKey())||'[]')}catch(e){return []}}
+function ackSet(a){try{a.length?localStorage.setItem(ackKey(),JSON.stringify(a)):localStorage.removeItem(ackKey())}catch(e){}}
+$('alerts').addEventListener('click',e=>{
+  if(e.target.id==='ackAlerts'){if(!confirm('Você já conferiu e corrigiu os avisos amarelos?\n\nEles somem e só voltam se aparecer algum aviso novo. Os vermelhos continuam até serem corrigidos.'))return;
+    ackSet([...new Set([...ackGet(),...analyze().out.filter(o=>o[0]==='warn').map(o=>o[1])])]);refresh(false)}
+  else if(e.target.id==='ackUndo'){ackSet([]);refresh(false)}
+});
 /* ---------- data ---------- */
 function setDate(d){flushAll();cur=d;$('date').value=d;openPick=null;confirmDel=null;confirmClear=false;$('clearDay').textContent='Limpar dia';watchDay()}
 $('date').onchange=e=>{if(e.target.value)setDate(e.target.value)};

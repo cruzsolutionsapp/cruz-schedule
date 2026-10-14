@@ -577,3 +577,5 @@ body.viewer{padding-bottom:24px}
 .statlink.warn{color:var(--warn)} .statlink.bad{color:var(--bad)}
 @keyframes flashp{0%{box-shadow:0 0 0 3px var(--hivis)}100%{box-shadow:0 0 0 0 transparent}}
 .flash{animation:flashp 1.6s ease-out}
+.ackbtn{margin:2px 0 4px;font-weight:600}
+.ackinfo{display:block;color:var(--muted);margin:2px 0 6px}
