@@ -56,6 +56,7 @@
 
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" id="tab-day" aria-selected="true">Escala do dia</button>
+    <button class="tab" role="tab" id="tab-cal" aria-selected="false">📅 Calendário</button>
     <button class="tab" role="tab" id="tab-roster" aria-selected="false">Cadastro</button>
     <button class="tab" role="tab" id="tab-photos" aria-selected="false" hidden>Fotos</button>
     <button class="tab" role="tab" id="tab-access" aria-selected="false" hidden>Acesso</button>
@@ -95,6 +96,20 @@
           <div class="chips" id="free"></div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="view-cal" hidden>
+    <div class="panel">
+      <div class="calhead">
+        <button class="icon-btn" id="calPrev" aria-label="Mês anterior">‹</button>
+        <h2 id="calTitle">Calendário</h2>
+        <button class="icon-btn" id="calNext" aria-label="Próximo mês">›</button>
+        <button class="btn" id="calToday">Hoje</button>
+        <span class="callegend"><i class="cl ok"></i>com folga <i class="cl warn"></i>quase no limite <i class="cl bad"></i>passou do que temos</span>
+      </div>
+      <div class="calgrid" id="calGrid"></div>
+      <p class="hint" id="calHint">Toque num dia pra ver ou criar agendamentos. O agendamento já entra como obra na escala daquele dia; a equipe você monta depois.</p>
     </div>
   </section>
 
@@ -237,6 +252,30 @@
   <input id="tSearch" class="tsearch" type="search" placeholder="Procurar meu nome" aria-label="Procurar nome" autocomplete="off">
   <div class="tbody" id="tBody"></div>
   <div class="tmodal" id="tModal" hidden><div class="tcard" id="tModalBody" role="dialog" aria-modal="true"></div></div>
+</div>
+<div class="modal" id="calDay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cdTitle">
+    <div class="sheethead"><h2 id="cdTitle">Dia</h2><button class="icon-btn" id="cdClose" aria-label="Fechar">×</button></div>
+    <div id="cdCount"></div>
+    <div id="cdList"></div>
+    <form id="cdForm" class="cdform" novalidate>
+      <h3>+ Novo agendamento</h3>
+      <label class="f">Companhia<input id="cdCo" list="cdCoList" autocomplete="off" required><datalist id="cdCoList"></datalist></label>
+      <label class="f">Endereço<input id="cdAddr" list="cdAddrList" autocomplete="off" placeholder="Rua, cidade, MA (pode deixar vazio se ainda não souber)"><datalist id="cdAddrList"></datalist></label>
+      <div class="row">
+        <label class="f">Start<input type="time" id="cdStart" value="07:00"></label>
+        <label class="f">Quantas pessoas<input type="number" id="cdNeed" min="1" max="99" inputmode="numeric" placeholder="Ex.: 5"></label>
+      </div>
+      <label class="f">Observação<input id="cdNote" placeholder="Ex.: Gate Code, levar roupa…"></label>
+      <div class="row">
+        <label class="f">Repetir até (opcional)<input type="date" id="cdUntil"></label>
+        <div class="cdchecks"><label class="check"><input type="checkbox" id="cdSkipWknd" checked> Pular sábado e domingo</label>
+          <label class="check"><input type="checkbox" id="cdAllWeek"> All Week</label></div>
+      </div>
+      <div class="alert warn" id="cdWarn" hidden></div>
+      <button class="btn primary" id="cdSave" type="submit">Agendar</button>
+    </form>
+  </div>
 </div>
 <div class="toast" id="toast" hidden></div>
 </div>

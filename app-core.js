@@ -370,6 +370,7 @@ function renderJobs(){
   refresh(false);
 }
 function refresh(save=true){
+  if(!$('view-cal').hidden){renderCal();if(calSel)renderCalDay()}
   const {out}=analyze();
   $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('');
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
@@ -525,7 +526,7 @@ $('copyMsg').onclick=()=>{
 };
 
 /* ---------- abas ---------- */
-function tab(which){['day','roster','access','photos','search'].forEach(t=>{const b=$('tab-'+t),v=$('view-'+t);if(b)b.setAttribute('aria-selected',t===which);if(v)v.hidden=t!==which})}
+function tab(which){['day','roster','access','photos','search','cal'].forEach(t=>{const b=$('tab-'+t),v=$('view-'+t);if(b)b.setAttribute('aria-selected',t===which);if(v)v.hidden=t!==which})}
 $('tab-day').onclick=()=>{tab('day');renderJobs()};$('tab-roster').onclick=()=>{tab('roster');renderRoster()};if($('tab-access'))$('tab-access').onclick=()=>tab('access');
 
 /* ---------- cadastro ---------- */
@@ -960,6 +961,97 @@ $('tModal').addEventListener('click',e=>{if(e.target.id==='tYes')tCheckin();else
 $('tSearch').addEventListener('input',renderTotem);
 $('tExit').onclick=closeTotem;
 if($('openTotem')){$('openTotem').hidden=!P.escala||!!(ctx&&ctx.totem);$('openTotem').onclick=openTotem}
+
+/* ---------- Calendário de agendamentos ----------
+   O agendamento é gravado direto como obra em days/AAAA-MM-DD (equipe vazia, "need" = quantas pessoas).
+   Contador do dia = soma do "need" (ou da equipe, o que for maior) de todas as obras × funcionários do cadastro. */
+const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+let calMonth=(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)})(),CALDAYS={},calSel=null,calUnsub=null;
+const reserved=jobs=>(jobs||[]).reduce((s,j)=>s+Math.max(+j.need||0,(j.crew||[]).length),0);
+const levelOf=n=>{const tot=S.workers.length||0;if(!n)return '';if(!tot)return 'ok';return n>tot?'bad':n>=tot*0.85?'warn':'ok'};
+function calRange(){const f=new Date(calMonth);f.setDate(1-f.getDay());const l=new Date(f);l.setDate(f.getDate()+41);return [f,l]}
+function loadCal(){
+  if(calUnsub){calUnsub();calUnsub=null}
+  const [f,l]=calRange();CALDAYS={};renderCal();
+  calUnsub=db.collection('days').where('date','>=',iso(f)).where('date','<=',iso(l)).onSnapshot(s=>{CALDAYS={};s.docs.forEach(d=>{const x=d.data();if(x&&x.date)CALDAYS[x.date]=x});renderCal();if(calSel)renderCalDay()},e=>console.error(e));
+}
+function dayJobs(date){if(date===cur&&dayLoaded)return D.jobs;return (CALDAYS[date]&&CALDAYS[date].jobs)||[]}
+function renderCal(){
+  $('calTitle').textContent=MESES[calMonth.getMonth()]+' '+calMonth.getFullYear();
+  const [f]=calRange();const today=iso(new Date());const tot=S.workers.length;
+  let html=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d=>`<div class="calwd">${d}</div>`).join('');
+  for(let i=0;i<42;i++){const d=new Date(f);d.setDate(f.getDate()+i);const ds=iso(d);const jobs=dayJobs(ds);const n=reserved(jobs);const lv=levelOf(n);
+    html+=`<button class="calday${d.getMonth()!==calMonth.getMonth()?' out':''}${ds===today?' today':''}${ds===cur?' cur':''}" data-cal="${ds}" aria-label="${esc(dateBR(ds))}">
+      <span class="cdnum">${d.getDate()}</span>
+      ${jobs.slice(0,3).map(j=>`<span class="cdjob">${esc(j.company||'Obra')}</span>`).join('')}${jobs.length>3?`<span class="cdmore">+${jobs.length-3}</span>`:''}
+      ${n?`<span class="cdcount ${lv}">👷 ${n}${tot?' de '+tot:''}</span>`:''}</button>`}
+  $('calGrid').innerHTML=html;
+}
+function openCalDay(ds){calSel=ds;$('calDay').hidden=false;document.body.classList.add('modal-open');
+  $('cdForm').reset();$('cdStart').value='07:00';$('cdSkipWknd').checked=true;$('cdAllWeek').checked=false;$('cdWarn').hidden=true;
+  $('cdCoList').innerHTML=Object.keys(S.companies).sort((a,b)=>a.localeCompare(b,'pt')).map(c=>`<option value="${esc(c)}">`).join('');
+  $('cdForm').hidden=!P.escala;renderCalDay();}
+function closeCalDay(){calSel=null;$('calDay').hidden=true;document.body.classList.remove('modal-open')}
+function renderCalDay(){
+  if(!calSel)return;const jobs=dayJobs(calSel);const n=reserved(jobs),tot=S.workers.length,lv=levelOf(n);
+  $('cdTitle').textContent=dateBR(calSel);
+  $('cdCount').innerHTML=`<div class="cdtotal ${lv||'ok'}">👷 <b>${n}</b> pessoa${n===1?'':'s'} reservada${n===1?'':'s'} de <b>${tot}</b> no cadastro${n>tot?` · <b>faltam ${n-tot}</b>`:tot-n>0?` · sobram ${tot-n}`:''}</div>`;
+  $('cdList').innerHTML=jobs.length?`<div class="cdjobs">${jobs.map(j=>`<div class="cdj"><div><b>${esc(j.company||'Obra')}</b>${j.allWeek?' <span class="wkbadge">All Week</span>':''}<small>${esc(j.waiting||!j.address?'Endereço a confirmar':j.address)}</small></div>
+      <span class="cdjn">${esc(fmt(j.start)||'')} · ${(j.crew||[]).length}${j.need?' de '+j.need:''} pessoas</span></div>`).join('')}</div>
+      <button class="btn" id="cdOpen">Abrir na escala do dia →</button>`:'<p class="empty">Nada agendado neste dia.</p>';
+  cdCheck();
+}
+function cdDates(){
+  const start=calSel,until=$('cdUntil').value;if(!until||until<=start)return [start];
+  const out=[];const [y,m,d]=start.split('-').map(Number);for(let i=0;i<60;i++){const dt=new Date(y,m-1,d+i);const ds=iso(dt);if(ds>until)break;
+    if($('cdSkipWknd').checked&&(dt.getDay()===0||dt.getDay()===6))continue;out.push(ds)}
+  return out;
+}
+function cdCheck(){
+  const need=+$('cdNeed').value||0,tot=S.workers.length;const ds=cdDates();
+  if(ds.length>1&&!$('cdAllWeek').dataset.touched)$('cdAllWeek').checked=true;
+  const over=need?ds.map(x=>({x,n:reserved(dayJobs(x))+need})).filter(o=>tot&&o.n>tot):[];
+  const w=$('cdWarn');
+  if(over.length){w.hidden=false;w.innerHTML=`⚠️ Vai passar do que vocês têm (${tot}) em: `+over.map(o=>`<b>${esc(dateBR(o.x))}</b> (${o.n})`).join(', ')+'. Dá pra agendar mesmo assim.'}
+  else if(ds.length>1){w.hidden=false;w.className='alert ok';w.textContent=`Vai criar a obra em ${ds.length} dias: ${ds.map(x=>x.slice(5).split('-').join('/')).join(', ')}`;return}
+  else w.hidden=true;
+  w.className='alert warn';
+}
+function newBooking(date){
+  const co=fmtCompany($('cdCo').value),addr=fmtAddress($('cdAddr').value),start=$('cdStart').value||'07:00',need=Math.max(0,Math.min(99,parseInt($('cdNeed').value,10)||0));
+  const key=addr?akey(addr):'',travel=key&&S.travel[key]!=null?S.travel[key]:null,early=30;
+  const j={id:nid(),company:co,address:addr,waiting:!addr,office:false,attire:ATTIRE,shop:'',start,early,travel,autoShop:true,tk:travel!=null?key:'',need,note:tidy($('cdNote').value),allWeek:$('cdAllWeek').checked,crew:[],left:0};
+  if(travel!=null)j.shop=toHHMM(Math.floor((toMin(start)-early-travel)/5)*5);
+  return j;
+}
+$('cdForm').addEventListener('submit',async e=>{e.preventDefault();if(!P.escala)return;
+  if(!fmtCompany($('cdCo').value)){toast('Coloque o nome da companhia');$('cdCo').focus();return}
+  const dates=cdDates();const btn=$('cdSave');btn.disabled=true;btn.textContent='Agendando…';
+  try{
+    for(const ds of dates){const j=newBooking(ds);
+      if(ds===cur&&dayLoaded){D.jobs.push(j);saveDay();renderJobs();continue}
+      const snap=await db.doc(dayPath(ds)).get();const day=snap.exists?snap.data():{date:ds,jobs:[],sent:{}};
+      const jobs=Array.isArray(day.jobs)?day.jobs:[];jobs.push(j);
+      await db.doc(dayPath(ds)).set({date:ds,jobs,sent:day.sent||{},drivers:day.drivers||{}});
+    }
+    const first=newBooking(dates[0]);if(first.address)rememberAddr(first);
+    toast(dates.length>1?`✓ Agendado em ${dates.length} dias`:'✓ Agendado');
+    $('cdForm').reset();$('cdStart').value='07:00';$('cdSkipWknd').checked=true;delete $('cdAllWeek').dataset.touched;$('cdAllWeek').checked=false;$('cdWarn').hidden=true;
+  }catch(err){console.error(err);toast('Não consegui agendar ('+(err.code||'erro')+')')}
+  finally{btn.disabled=false;btn.textContent='Agendar'}
+});
+['cdNeed','cdUntil','cdSkipWknd'].forEach(id=>$(id).addEventListener('input',cdCheck));
+$('cdAllWeek').addEventListener('change',e=>{e.target.dataset.touched='1'});
+$('cdCo').addEventListener('change',()=>{const list=coAddrs($('cdCo').value);$('cdAddrList').innerHTML=list.map(a=>`<option value="${esc(a)}">`).join('');if(list.length===1&&!$('cdAddr').value)$('cdAddr').value=list[0]});
+$('calGrid').addEventListener('click',e=>{const b=e.target.closest('[data-cal]');if(b)openCalDay(b.dataset.cal)});
+$('calDay').addEventListener('click',e=>{if(e.target.id==='calDay')closeCalDay();if(e.target.id==='cdOpen'){const ds=calSel;closeCalDay();setDate(ds);tab('day')}});
+$('cdClose').onclick=closeCalDay;
+$('calPrev').onclick=()=>{calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()-1,1);loadCal()};
+$('calNext').onclick=()=>{calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+1,1);loadCal()};
+$('calToday').onclick=()=>{const d=new Date();calMonth=new Date(d.getFullYear(),d.getMonth(),1);loadCal()};
+$('tab-cal').onclick=()=>{tab('cal');loadCal()};
+if(viewer)$('tab-cal').hidden=true;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&calSel)closeCalDay()});
 
 /* ---------- aba Buscar: onde cada um trabalhou / quem foi em cada companhia ---------- */
 const fold=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
