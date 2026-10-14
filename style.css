@@ -431,3 +431,7 @@ body.viewer{padding-bottom:24px}
 .callegend.info{border-radius:999px;padding:3px 10px;font-size:13px}
 .callegend.info.ok{background:var(--ok-soft);color:var(--ok)}.callegend.info.warn{background:var(--warn-soft);color:var(--warn)}.callegend.info.bad{background:var(--bad-soft);color:var(--bad)}
 .cdfree{display:none}
+
+.cdfreenames{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.cdfreenames small{color:var(--muted);font-weight:400}
+.cdfreenames .chips{display:flex;flex-wrap:wrap;gap:6px}

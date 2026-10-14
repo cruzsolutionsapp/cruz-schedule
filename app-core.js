@@ -996,7 +996,12 @@ function closeCalDay(){calSel=null;$('calDay').hidden=true;document.body.classLi
 function renderCalDay(){
   if(!calSel)return;const jobs=dayJobs(calSel);const n=reserved(jobs),tot=S.workers.length,lv=levelOf(n);
   $('cdTitle').textContent=dateBR(calSel);
-  $('cdCount').innerHTML=`<div class="cdtotal ${lv||'ok'}">👷 <b>${n}</b> pessoa${n===1?'':'s'} reservada${n===1?'':'s'} de <b>${tot}</b> no cadastro${n>tot?` · <b>faltam ${n-tot}</b>`:tot-n>0?` · sobram ${tot-n}`:''}</div>`;
+  const inCrew=new Set();jobs.forEach(j=>(j.crew||[]).forEach(c=>inCrew.add(nkey(c.name))));
+  const freeNames=S.workers.filter(w=>!inCrew.has(nkey(w)));
+  const pend=jobs.reduce((s,j)=>s+Math.max(0,(+j.need||0)-(j.crew||[]).length),0);
+  const freeHTML=S.workers.length?`<div class="cdfreenames"><b>Sem escala neste dia (${freeNames.length})</b>${pend?`<small> · ainda faltam ${pend} vaga${pend===1?'':'s'} pra preencher nas obras</small>`:''}
+    <div class="chips">${freeNames.map(w=>`<span class="chip">${esc(w)}</span>`).join('')||'<span class="empty">Todo mundo está escalado.</span>'}</div></div>`:'';
+  $('cdCount').innerHTML=`<div class="cdtotal ${lv||'ok'}">👷 <b>${n}</b> pessoa${n===1?'':'s'} reservada${n===1?'':'s'} de <b>${tot}</b> no cadastro${n>tot?` · <b>faltam ${n-tot}</b>`:tot-n>0?` · sobram ${tot-n}`:''}</div>`+freeHTML;
   $('cdList').innerHTML=jobs.length?`<div class="cdjobs">${jobs.map(j=>`<div class="cdj"><div><b>${esc(j.company||'Obra')}</b>${j.allWeek?' <span class="wkbadge">All Week</span>':''}<small>${esc(j.waiting||!j.address?'Endereço a confirmar':j.address)}</small></div>
       <span class="cdjn">${esc(fmt(j.start)||'')} · ${(j.crew||[]).length}${j.need?' de '+j.need:''} pessoas</span></div>`).join('')}</div>
       <button class="btn" id="cdOpen">Abrir na escala do dia →</button>`:'<p class="empty">Nada agendado neste dia.</p>';
