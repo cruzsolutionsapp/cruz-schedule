@@ -1006,18 +1006,26 @@ const hm=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-d
 function buildReport(){
   const jobs=D.jobs.filter(j=>j.company||j.crew.length);
   const [y,m,d]=cur.split('-');const wd=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][new Date(+y,m-1,+d).getDay()];
+  const name=j=>tidy(j.company)||'Obra';
+  const dupe=n=>jobs.filter(x=>nkey(name(x))===nkey(n)).length>1;
+  const label=j=>{const n=name(j);if(!dupe(n))return n;const a=tidy(j.address).split(',')[0];return a?`${n} (${a})`:n};
+  const late=mins=>mins>=60?`+${Math.floor(mins/60)}h${String(mins%60).padStart(2,'0')}`:`+${mins} min`;
   let esc_=0,pres=0;const falt=[],semConf=[];
-  jobs.forEach(j=>{esc_+=j.crew.length;let marked=0;j.crew.forEach(c=>{const s=attOf(j,c.name);if(s==='in'){pres++;marked++}else if(s==='out'){falt.push(c.name+' ('+(j.company||'Obra')+')');marked++}});
-    if(j.crew.length&&!marked)semConf.push(j.company||'Obra')});
+  jobs.forEach(j=>{esc_+=j.crew.length;let marked=0;j.crew.forEach(c=>{const s=attOf(j,c.name);if(s==='in'){pres++;marked++}else if(s==='out'){falt.push(`${tidy(c.name)} (${label(j)})`);marked++}});
+    if(j.crew.length&&!marked)semConf.push(label(j))});
   const desp=jobs.filter(j=>j.left).length;
-  const L=[`📊 Relatório - ${wd} ${m}/${d}`,'',`Obras: ${jobs.length} · Despachadas: ${desp} de ${jobs.length}`,`Escalados: ${esc_} · Presentes: ${pres} · Faltas: ${falt.length}`];
-  if(falt.length)L.push('','❌ Faltaram:',...falt.map(x=>'• '+x));
-  L.push('');
-  jobs.forEach(j=>{let t='';
-    if(j.left){t=' - saiu '+hm(j.left);const s=j.shop?new Date(cur+'T'+j.shop+':00').getTime():0;const late=s?Math.floor((j.left-s)/60000):0;if(late>0)t+=` (${late} min atrasada)`}
-    else t=' - ainda aguardando';
-    L.push(`${j.left?'✅':'⏳'} ${j.company||'Obra'} - ${j.crew.length} pessoa${j.crew.length===1?'':'s'}${t}`)});
-  if(semConf.length)L.push('','⚠️ Presença não confirmada: '+semConf.join(', '));
+  const L=['📊 *Relatório do dia*',`${wd} ${m}/${d}`,''];
+  L.push(`🏗️ Obras: ${jobs.length}${desp===jobs.length?' (todas despachadas)':` · despachadas ${desp} de ${jobs.length}`}`);
+  L.push(`👷 Escalados: ${esc_}`);
+  if(pres+falt.length)L.push(`✅ Presentes: ${pres} · ❌ Faltas: ${falt.length}`);
+  else L.push('📋 Presença: não marcada');
+  if(falt.length)L.push('','❌ *Faltaram*',...falt.map(x=>'• '+x));
+  L.push('','🚚 *Saídas*');
+  jobs.forEach(j=>{let t;
+    if(j.left){t=hm(j.left);const s=j.shop?new Date(cur+'T'+j.shop+':00').getTime():0;const mins=s?Math.floor((j.left-s)/60000):0;if(mins>0)t+=` (${late(mins)})`}
+    else t='aguardando';
+    L.push(`${j.left?'✅':'⏳'} ${label(j)} · ${j.crew.length} pessoa${j.crew.length===1?'':'s'} · ${t}`)});
+  if(semConf.length&&(pres+falt.length))L.push('','⚠️ Presença não confirmada: '+semConf.join(', '));
   return L.join('\n');
 }
 function renderReport(){
