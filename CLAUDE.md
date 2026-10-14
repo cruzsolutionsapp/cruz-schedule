@@ -29,6 +29,7 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - Links do WhatsApp (avisar equipe, relatório): usar `https://api.whatsapp.com/send?phone=X&text=Y`. NÃO usar `whatsapp://` (deu "não pode abrir o link") nem `wa.me` (troca os emojis por ?).
 
 ## Formato da mensagem do WhatsApp (não mudar sem pedir)
+Obras da mesma companhia saem juntas na mensagem (`msgOrder`, opção A escolhida pelo Bruno: só junta, sem numerar; a ordem na escala não muda).
 ```
 Sexta-feira
 10/09        (dia da semana + mês/dia, uma vez no topo)

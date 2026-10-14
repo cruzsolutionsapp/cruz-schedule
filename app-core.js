@@ -122,9 +122,14 @@ const isCompanyVeh=v=>!!v&&v!==OWN;
 function vLabel(n){if(n===OWN)return '🚗';const v=S.vehicles.find(x=>x.n===n);return v?v.t+'('+v.n+')':'('+n+')'}
 // Cabeçalho da mensagem: dia da semana + mês/dia (ex.: "Sexta-feira" / "10/09")
 function msgHeader(){const[y,m,d]=cur.split('-');const wd=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][new Date(+y,m-1,+d).getDay()];return wd+'\n'+m+'/'+d}
+// Mensagem: obras da mesma companhia ficam juntas (na ordem em que a 1ª aparece na escala); o resto não muda
+function msgOrder(jobs){const out=[],done=new Set();
+  jobs.forEach(j=>{if(done.has(j))return;const k=nkey(j.company||'');
+    const grp=k?jobs.filter(x=>!done.has(x)&&nkey(x.company||'')===k):[j];grp.forEach(x=>{done.add(x);out.push(x)})});
+  return out}
 function buildMsg(){
   if(!D.jobs.length)return '';
-  return msgHeader()+'\n\n'+D.jobs.map(j=>{
+  return msgHeader()+'\n\n'+msgOrder(D.jobs).map(j=>{
     const L=['✅ '+(j.company.trim()||'(sem nome)')];
     L.push(j.waiting?'(Esperando)':(j.address.trim()||'(endereço?)'));
     if(j.attire.trim())L.push('🔴 '+j.attire.trim());
