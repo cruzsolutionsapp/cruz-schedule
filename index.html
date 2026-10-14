@@ -87,6 +87,15 @@
           <div class="chat"><div class="bubble" id="preview"></div></div>
           <p class="hint">Use o botão laranja embaixo pra copiar e colar no grupo.</p>
         </div>
+        <div class="panel" id="reportPanel">
+          <h2>Relatório do dia <small id="rpStatus"></small></h2>
+          <details class="rpdetails"><summary>Ver o relatório</summary><div class="chat"><div class="bubble" id="rpPreview"></div></div></details>
+          <div class="rpbtns">
+            <a class="btn primary" id="rpSend" href="#" target="_blank" rel="noopener">📊 Enviar pro patrão</a>
+            <button class="btn" id="rpCopy">Copiar</button>
+          </div>
+          <p class="hint" id="rpHint"></p>
+        </div>
         <div class="panel" id="notifyPanel">
           <h2>Avisar equipe <small id="ntCount"></small></h2>
           <div id="notify"></div>
@@ -189,6 +198,11 @@
           <h2>Acesso</h2>
           <div class="lrow"><span class="wname" id="who"></span><button class="btn" id="logout">Sair</button></div>
           <button class="btn" id="openTotem" hidden style="margin-top:8px">🖥️ Abrir modo Totem (check-in)</button>
+        </div>
+        <div class="panel">
+          <h2>Relatório do dia</h2>
+          <label class="f">WhatsApp do patrão (quem recebe o relatório)<input id="bossPhone" inputmode="tel" placeholder="(508) 555-1234"></label>
+          <p class="hint">O botão "📊 Enviar pro patrão", na escala, abre o WhatsApp já nesse contato com o resumo do dia.</p>
         </div>
         <div class="panel">
           <h2>Saída do shop</h2>

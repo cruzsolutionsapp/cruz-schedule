@@ -65,7 +65,8 @@ function normRoster(d){return {workers:Array.isArray(d&&d.workers)?[...d.workers
   buffer:(d&&Number.isFinite(d.buffer))?d.buffer:30,
   travel:(d&&d.travel&&typeof d.travel==='object')?{...d.travel}:{},
   drivers:Array.isArray(d&&d.drivers)?d.drivers.filter(x=>typeof x==='string'):[],
-  offices:(d&&d.offices&&typeof d.offices==='object')?{...d.offices}:{}}}
+  offices:(d&&d.offices&&typeof d.offices==='object')?{...d.offices}:{},
+  boss:(d&&typeof d.boss==='string')?d.boss:''}}
 function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.forEach(j=>{j.id=j.id||nid();j.need=+j.need||0;delete j.calc;j.travel=Number.isFinite(j.travel)?j.travel:null;j.autoShop=!!j.autoShop;j.early=Number.isFinite(j.early)?j.early:30;j.tk=j.tk||'';j.crew=Array.isArray(j.crew)?j.crew:[];['company','address','attire','shop','start','note'].forEach(k=>j[k]=j[k]||'');j.allWeek=!!j.allWeek;j.waiting=!!j.waiting;j.office=!!j.office;j.left=Number.isFinite(j.left)?j.left:0});return {date:cur,jobs,sent:(d&&d.sent&&typeof d.sent==='object')?{...d.sent}:{}}}
 
 /* evita re-render enquanto a pessoa digita */
@@ -394,6 +395,7 @@ function refresh(save=true){
   $('freeCount').textContent=free.length+' de '+S.workers.length;
   if(!(document.activeElement&&document.activeElement.classList.contains('ntphone')))renderNotify();
   renderPhotos();
+  renderReport();
   const people=D.jobs.reduce((s,j)=>s+j.crew.length,0);
   const bad=out.filter(o=>o[0]!=='ok').length;
   const needed=D.jobs.reduce((s,j)=>s+Math.max(j.need||0,j.crew.length),0);
@@ -555,6 +557,7 @@ $('tab-day').onclick=()=>{tab('day');renderJobs()};$('tab-roster').onclick=()=>{
 $('baseAddr').addEventListener('change',e=>{const v=fmtAddress(e.target.value);e.target.value=v;if(v&&v!==S.base){S.base=v;S.travel={};saveRoster();toast('Endereço da empresa salvo. Tempos serão recalculados nas próximas obras')}});
 function renderRoster(){
   if(document.activeElement!==$('baseAddr'))$('baseAddr').value=S.base;
+  if($('bossPhone')&&document.activeElement!==$('bossPhone')){$('bossPhone').value=S.boss||'';$('bossPhone').disabled=!P.cadastro}
   $('wCount').textContent=S.workers.length+' fixos';
   $('workers').innerHTML=S.workers.map((w,i)=>`<div class="lrow"><input class="wname" data-wn="${i}" value="${esc(w)}" aria-label="Nome" id="wn-${i}">
     <button class="drvtag${isDriverName(w)?' on':''}" data-drv="${i}" aria-pressed="${isDriverName(w)}" title="Motorista / responsável pela obra">🔑<span> Motorista</span></button>
@@ -997,6 +1000,40 @@ $('tModal').addEventListener('click',e=>{if(e.target.id==='tYes')tCheckin();else
 $('tSearch').addEventListener('input',renderTotem);
 $('tExit').onclick=closeTotem;
 if($('openTotem')){$('openTotem').hidden=!P.escala||!!(ctx&&ctx.totem);$('openTotem').onclick=openTotem}
+
+/* ---------- Relatório do dia (pro patrão) ---------- */
+const hm=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
+function buildReport(){
+  const jobs=D.jobs.filter(j=>j.company||j.crew.length);
+  const [y,m,d]=cur.split('-');const wd=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][new Date(+y,m-1,+d).getDay()];
+  let esc_=0,pres=0;const falt=[],semConf=[];
+  jobs.forEach(j=>{esc_+=j.crew.length;let marked=0;j.crew.forEach(c=>{const s=attOf(j,c.name);if(s==='in'){pres++;marked++}else if(s==='out'){falt.push(c.name+' ('+(j.company||'Obra')+')');marked++}});
+    if(j.crew.length&&!marked)semConf.push(j.company||'Obra')});
+  const desp=jobs.filter(j=>j.left).length;
+  const L=[`📊 Relatório - ${wd} ${m}/${d}`,'',`Obras: ${jobs.length} · Despachadas: ${desp} de ${jobs.length}`,`Escalados: ${esc_} · Presentes: ${pres} · Faltas: ${falt.length}`];
+  if(falt.length)L.push('','❌ Faltaram:',...falt.map(x=>'• '+x));
+  L.push('');
+  jobs.forEach(j=>{let t='';
+    if(j.left){t=' - saiu '+hm(j.left);const s=j.shop?new Date(cur+'T'+j.shop+':00').getTime():0;const late=s?Math.floor((j.left-s)/60000):0;if(late>0)t+=` (${late} min atrasada)`}
+    else t=' - ainda aguardando';
+    L.push(`${j.left?'✅':'⏳'} ${j.company||'Obra'} - ${j.crew.length} pessoa${j.crew.length===1?'':'s'}${t}`)});
+  if(semConf.length)L.push('','⚠️ Presença não confirmada: '+semConf.join(', '));
+  return L.join('\n');
+}
+function renderReport(){
+  const box=$('reportPanel');if(!box)return;
+  box.hidden=!(P.escala||P.telefones)||viewer||!D.jobs.length;if(box.hidden)return;
+  const txt=buildReport();$('rpPreview').textContent=txt;
+  const desp=D.jobs.filter(j=>j.left).length;
+  $('rpStatus').textContent=desp===D.jobs.length?'tudo despachado ✓':desp+' de '+D.jobs.length+' despachadas';
+  const ph=waDigits(S.boss||'');
+  $('rpSend').href='https://api.whatsapp.com/send?'+(ph?'phone='+ph+'&':'')+'text='+encodeURIComponent(txt);
+  $('rpHint').textContent=ph?'':'Dica: salve o WhatsApp do patrão em Cadastro → Relatório do dia, pra abrir direto no contato dele.';
+}
+$('rpSend').addEventListener('click',()=>{const txt=buildReport();try{navigator.clipboard.writeText(txt).catch(()=>{})}catch(e){}});
+$('rpCopy').onclick=()=>{const txt=buildReport();const fb=()=>{const ta=$('fallback');ta.value=txt;ta.select();try{document.execCommand('copy');toast('Relatório copiado')}catch(e){}};
+  try{navigator.clipboard.writeText(txt).then(()=>toast('Relatório copiado'),fb)}catch(e){fb()}};
+$('bossPhone').addEventListener('change',e=>{if(!P.cadastro)return;const v=tidy(e.target.value);if(v&&!waDigits(v)){toast('Número parece incompleto. Use o formato (508) 555-1234');return}S.boss=v;saveRoster();renderReport();toast(v?'WhatsApp do patrão salvo':'WhatsApp do patrão removido')});
 
 /* ---------- Calendário de agendamentos ----------
    O agendamento é gravado direto como obra em days/AAAA-MM-DD (equipe vazia, "need" = quantas pessoas).

@@ -451,3 +451,9 @@ body.viewer{padding-bottom:24px}
 
 .latetimer{flex:none;font-size:13px;font-weight:700;color:var(--bad);background:var(--bad-soft);border-radius:999px;padding:2px 9px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .latetimer:empty{display:none}
+
+/* ---- relatório do dia ---- */
+.rpbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.rpbtns .btn.primary{flex:1;text-align:center;text-decoration:none;justify-content:center;display:inline-flex}
+.rpdetails summary{cursor:pointer;color:var(--muted);font-size:14px}
+.rpdetails .chat{margin-top:6px;max-height:280px}
