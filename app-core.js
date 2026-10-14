@@ -1022,7 +1022,7 @@ function buildReport(){
   if(falt.length)L.push('','❌ *Faltaram*',...falt.map(x=>'• '+x));
   L.push('','🚚 *Saídas*');
   jobs.forEach(j=>{let t;
-    if(j.left){t=hm(j.left);const s=j.shop?new Date(cur+'T'+j.shop+':00').getTime():0;const mins=s?Math.floor((j.left-s)/60000):0;if(mins>0)t+=` (${late(mins)})`}
+    if(j.left)t='saiu '+hm(j.left);
     else t='aguardando';
     L.push(`${j.left?'✅':'⏳'} ${label(j)} · ${j.crew.length} pessoa${j.crew.length===1?'':'s'} · ${t}`)});
   if(semConf.length&&(pres+falt.length))L.push('','⚠️ Presença não confirmada: '+semConf.join(', '));
