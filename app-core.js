@@ -1001,14 +1001,6 @@ $('tSearch').addEventListener('input',renderTotem);
 $('tExit').onclick=closeTotem;
 if($('openTotem')){$('openTotem').hidden=!P.escala||!!(ctx&&ctx.totem);$('openTotem').onclick=openTotem}
 
-/* ---------- WhatsApp: usa o link curto oficial wa.me (no celular abre o app direto) ----------
-   Troca https://api.whatsapp.com/send?phone=X&text=Y por https://wa.me/X?text=Y na hora do clique. */
-const toWaMe=u=>{try{const q=new URL(u).searchParams,ph=(q.get('phone')||'').replace(/\D/g,''),t=q.get('text');
-  return 'https://wa.me/'+ph+(t!=null?'?text='+encodeURIComponent(t):'')}catch(err){return u}};
-document.addEventListener('click',e=>{
-  const a=e.target.closest('a[href^="https://api.whatsapp.com/send"]');if(a)a.href=toWaMe(a.href);
-},true);
-
 /* ---------- Relatório do dia (pro patrão) ---------- */
 const hm=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
 function buildReport(){
