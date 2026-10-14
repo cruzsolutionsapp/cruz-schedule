@@ -1040,6 +1040,12 @@ function watchNextDays(){
   const a=new Date();a.setDate(a.getDate()+1);const b=new Date();b.setDate(b.getDate()+4);
   cUnsub=db.collection('days').where('date','>=',iso(a)).where('date','<=',iso(b)).onSnapshot(s=>{CNEXT={};s.docs.forEach(d=>{const x=d.data();if(x&&x.date)CNEXT[x.date]=x});renderCentral()},e=>console.error(e));
 }
+/* Central: a cada 5 min confere se saiu versão nova do app (VERSION do sw.js); se saiu e ninguém está mexendo, recarrega sozinha */
+let appVer=null;
+async function swVersion(){try{const r=await fetch('sw.js?v='+Date.now(),{cache:'no-store'});const m=(await r.text()).match(/VERSION\s*=\s*'([^']+)'/);return m?m[1]:null}catch(e){return null}}
+swVersion().then(v=>{appVer=v});
+setInterval(async()=>{if(!centralOn)return;const v=await swVersion();if(!v)return;if(!appVer){appVer=v;return}
+  if(v!==appVer&&!cUnlocked&&!cDetail&&$('cPin').hidden)location.reload()},300000);
 /* Central: um PIN (guardado só neste aparelho) destrava despachar, presença e abrir o editor. Tranca sozinha após 1 min parado. */
 const cOpen=new Set();let cPage=0,cPages=1,cDetail=null,cKinds=[],CNEXT={};let cUnlocked=false,cIdle=null,pinBuf='',pinStage='enter',pinFirst='',cBackIdle=null;
 const PINKEY='centralPin'+(ctx&&ctx.email==='demo@exemplo'?'-demo':'');
