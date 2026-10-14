@@ -1020,65 +1020,93 @@ function closeCentral(){
   document.body.classList.remove('totem-on');$('central').hidden=true;
   if(/central/.test(location.hash))history.replaceState(null,'',location.pathname+location.search+(location.hash==='#demo-central'?'#demo':''));
 }
-let cLayout=(()=>{try{return localStorage.getItem('centralLayout')||'A'}catch(e){return 'A'}})(),cOpen=new Set();
+/* Central: um PIN (guardado só neste aparelho) destrava despachar, presença e abrir o editor. Tranca sozinha após 1 min parado. */
+const cOpen=new Set();let cUnlocked=false,cIdle=null,pinBuf='',pinStage='enter',pinFirst='',cBackIdle=null;
+const PINKEY='centralPin'+(ctx&&ctx.email==='demo@exemplo'?'-demo':'');
+const getPin=()=>{try{return localStorage.getItem(PINKEY)||''}catch(e){return ''}};
+const setPin=v=>{try{v?localStorage.setItem(PINKEY,v):localStorage.removeItem(PINKEY)}catch(e){}};
+function cRelock(){cUnlocked=false;clearTimeout(cIdle);renderCentral()}
+function cTouch(){if(!cUnlocked)return;clearTimeout(cIdle);cIdle=setTimeout(cRelock,60000)}
 function renderCentral(){
   if(!centralOn)return;
   $('cClock').textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase();
   const [yy,mm,dd]=todayISO().split('-');
   $('cDate').textContent=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][new Date(+yy,mm-1,+dd).getDay()]+', '+dd+'/'+mm;
-  document.querySelectorAll('#cSwitch [data-lay]').forEach(b=>b.classList.toggle('on',b.dataset.lay===cLayout));
+  $('cLockBtn').hidden=!cUnlocked;
   if(!dayLoaded){$('cBody').innerHTML='<p class="tempty">Carregando…</p>';$('cStats').innerHTML='';return}
   const jobs=D.jobs.filter(j=>j.company||j.crew.length);
   let esc_=0,pres=0,falt=0;
   jobs.forEach(j=>{esc_+=j.crew.length;j.crew.forEach(c=>{const st=attOf(j,c.name);if(st==='in')pres++;else if(st==='out')falt++})});
   const desp=jobs.filter(j=>j.left).length;
   const pill=(n,k,c)=>`<div class="cpill${c?' '+c:''}"><b>${n}</b><span>${k}</span></div>`;
-  let pills=pill(jobs.length,jobs.length===1?'obra':'obras');
-  if(cLayout!=='B')pills+=pill(desp+'/'+jobs.length,'despachadas',jobs.length&&desp===jobs.length?'ok':'');
-  if(cLayout!=='C'&&(pres||falt))pills+=pill(pres+'/'+esc_,'presentes','ok');
-  pills+=pill(falt,falt===1?'falta':'faltas',falt?'bad':'');
-  $('cStats').innerHTML=pills;
+  $('cStats').innerHTML=pill(jobs.length,jobs.length===1?'obra':'obras')+pill(desp+'/'+jobs.length,'despachadas',jobs.length&&desp===jobs.length?'ok':'')
+    +((pres||falt)?pill(pres+'/'+esc_,'presentes','ok'):'')+pill(falt,falt===1?'falta':'faltas',falt?'bad':'');
   if(!jobs.length){$('cBody').innerHTML='<p class="tempty">Ainda não tem escala lançada pra hoje.</p>';return}
   const name=j=>esc(tidy(j.company)||'Obra');
-  const city=j=>j.waiting||!j.address?'(Esperando endereço)':esc((fmtAddress(j.address).split(',')[1]||fmtAddress(j.address).split(',')[0]||'').trim());
+  const city=j=>{if(j.waiting||!j.address)return '(Esperando endereço)';const p=fmtAddress(j.address).split(',');return esc((p[1]||p[0]||'').trim())};
   const lateTxt=j=>{const m=lateMin(j);return m<60?m+' min':Math.floor(m/60)+'h'+String(m%60).padStart(2,'0')};
   const stOf=j=>j.left?'done':lateMin(j)?'late':'wait';
-  const short=j=>Math.max(0,(+j.need||0)-j.crew.length);
-  const shortTxt=j=>{const n=short(j);return n?(n>1?'faltam '+n+' pessoas':'falta 1 pessoa'):''};
+  const shortTxt=j=>{const n=Math.max(0,(+j.need||0)-j.crew.length);return n?(n>1?'faltam '+n+' pessoas':'falta 1 pessoa'):''};
   const marked=j=>j.crew.filter(c=>attOf(j,c.name)==='in').length;
   const people=j=>{const m=marked(j);return j.left&&m?m+'/'+j.crew.length:String(j.crew.length)};
-  const crewList=j=>j.crew.length?`<ul class="ccrew">${j.crew.map(c=>{const a=attOf(j,c.name),v=c.v?vLabel(c.v):'';
-    return `<li class="${a}"><i>${a==='in'?'✓':a==='out'?'✗':'·'}</i><span>${esc(tidy(c.name))}</span>${v?`<em>${esc(v)}</em>`:''}</li>`}).join('')}</ul>`:'<p class="cnone">Sem equipe ainda</p>';
-  const absent=j=>j.crew.filter(c=>attOf(j,c.name)==='out').map(c=>esc(tidy(c.name)));
+  const crewList=j=>j.crew.length?`<ul class="ccrew${cUnlocked?' edit':''}">${j.crew.map(c=>{const a=attOf(j,c.name),v=c.v?vLabel(c.v):'';
+    const btns=cUnlocked?`<span class="cab2"><button class="cyes${a==='in'?' on':''}" data-catt="${j.id}" data-n="${esc(c.name)}" data-s="in" aria-label="Veio">✓</button><button class="cno${a==='out'?' on':''}" data-catt="${j.id}" data-n="${esc(c.name)}" data-s="out" aria-label="Faltou">✗</button></span>`:'';
+    return `<li class="${a}">${cUnlocked?'':`<i>${a==='in'?'✓':a==='out'?'✗':'·'}</i>`}<span>${esc(tidy(c.name))}</span>${v?`<em>${esc(v)}</em>`:''}${btns}</li>`}).join('')}</ul>`:'<p class="cnone">Sem equipe ainda</p>';
+  const actions=j=>cUnlocked
+    ?`<div class="cacts"><button class="btn ${j.left?'':'primary '}cbig2" data-cact="left" data-cj2="${j.id}">${j.left?'↩ Desfazer despacho':'🚚 Despachar'}</button><button class="btn cbig2" data-cact="edit" data-cj2="${j.id}">✏️ Abrir editor</button></div>`
+    :`<div class="cacts"><button class="btn cbig2" data-cact="unlock">🔒 Alterar</button></div>`;
   const order=j=>j.left?2:lateMin(j)?0:1;
   const list=[...jobs].sort((a,b)=>order(a)-order(b)||String(a.shop||'').localeCompare(String(b.shop||'')));
-  let h='';
-  if(cLayout==='A'){
-    h='<div class="crows">'+list.map(j=>{const st=stOf(j),open=cOpen.has(j.id),sub=[city(j),shortTxt(j)].filter(Boolean).join(' · ');
-      return `<div class="crow ${st}${open?' open':''}" data-cj="${j.id}"><div class="crl"><span class="cdot2"></span><div class="cn">${name(j)}<small>${sub}</small></div>
-        <div class="ct">${j.left?'saiu <b>'+esc(hm12(j.left))+'</b>':'shop <b>'+esc(fmt(j.shop)||'—')+'</b>'}</div>
-        <span class="cst ${st}">${st==='done'?'DESPACHADA':st==='late'?'⏱ '+lateTxt(j)+' atrasada':'AGUARDANDO'}</span>
-        <div class="cc">${people(j)}<small>pessoas</small></div></div>${open?crewList(j):''}</div>`}).join('')+'</div><p class="chint">Toque numa obra pra ver a equipe</p>';
-  }else if(cLayout==='B'){
-    const col=(st,t)=>{const js=list.filter(j=>stOf(j)===st);
-      return `<div class="ccol ${st}"><h3>${t} <i>${js.length}</i></h3>${js.length?js.map(j=>{const ab=absent(j);
-        return `<div class="ck"><b>${name(j)}</b><p>${st==='done'?'saiu <strong>'+esc(hm12(j.left))+'</strong> · '+(marked(j)?marked(j)+' de '+j.crew.length+' vieram':j.crew.length+' pessoas')
-          :'shop '+esc(fmt(j.shop)||'—')+' · <strong>'+j.crew.length+' pessoa'+(j.crew.length===1?'':'s')+'</strong>'+(short(j)?' · '+shortTxt(j):'')}</p>
-          ${st==='late'?`<div class="cbig">⏱ ${lateTxt(j)}</div>`:''}${ab.length?`<p class="cab">❌ ${ab.join(', ')} faltou</p>`:''}</div>`}).join(''):'<p class="cempty">Nenhuma</p>'}</div>`};
-    h='<div class="ccols">'+col('late','Atrasadas')+col('wait','Aguardando')+col('done','Despachadas')+'</div>';
-  }else{
-    h='<div class="ccards">'+list.map(j=>{const st=stOf(j);
-      return `<div class="ccard ${st}"><div class="cch"><b>${name(j)}</b><span>${st==='done'?'DESPACHADA':st==='late'?'⏱ '+lateTxt(j):'AGUARDANDO'}</span></div>
-        <div class="ccb"><div class="ctm">${j.left?'saiu <b>'+esc(hm12(j.left))+'</b>':'shop <b>'+esc(fmt(j.shop)||'—')+'</b> · start '+esc(fmt(j.start)||'—')}${short(j)?' · <span class="cshortc">'+shortTxt(j)+'</span>':''}</div>${crewList(j)}</div></div>`}).join('')+'</div>';
-  }
-  $('cBody').innerHTML=h;
+  $('cBody').innerHTML='<div class="crows">'+list.map(j=>{const st=stOf(j),open=cOpen.has(j.id),sub=[city(j),shortTxt(j)].filter(Boolean).join(' · ');
+    return `<div class="crow ${st}${open?' open':''}"><div class="crl" data-cj="${j.id}"><span class="cdot2"></span><div class="cn">${name(j)}<small>${sub}</small></div>
+      <div class="ct">${j.left?'saiu <b>'+esc(hm12(j.left))+'</b>':'shop <b>'+esc(fmt(j.shop)||'—')+'</b>'}</div>
+      <span class="cst ${st}">${st==='done'?'DESPACHADA':st==='late'?'⏱ '+lateTxt(j)+' atrasada':'AGUARDANDO'}</span>
+      <div class="cc">${people(j)}<small>pessoas</small></div></div>${open?crewList(j)+actions(j):''}</div>`}).join('')+'</div>'
+    +`<p class="chint">${cUnlocked?'🔓 Destravado · tranca sozinho depois de 1 minuto parado':'Toque numa obra pra ver a equipe'}</p>`;
 }
-$('cBody').addEventListener('click',e=>{const r=e.target.closest('[data-cj]');if(!r)return;const id=r.dataset.cj;cOpen.has(id)?cOpen.delete(id):cOpen.add(id);renderCentral()});
-$('cSwitch').addEventListener('click',e=>{const b=e.target.closest('[data-lay]');if(!b)return;cLayout=b.dataset.lay;try{localStorage.setItem('centralLayout',cLayout)}catch(err){}renderCentral()});
-$('cExit').onclick=closeCentral;
-$('cFull').onclick=()=>{try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(e){}};
-if($('openCentral')){$('openCentral').hidden=!!(ctx&&ctx.totem);$('openCentral').onclick=openCentral}
-
+/* teclado do PIN */
+function pinOpen(){if(!P.escala){toast('Esse login é só pra ver. Pra alterar, a TV precisa entrar com um login do escritório.');return}
+  pinBuf='';pinFirst='';pinStage=getPin()?'enter':'new';$('cPin').hidden=false;pinDraw()}
+function pinClose(){$('cPin').hidden=true;pinBuf=''}
+function pinDraw(msg,bad){
+  $('cPinTitle').textContent=pinStage==='enter'?'Digite o PIN':pinStage==='new'?'Crie um PIN de 4 números':'Digite o PIN de novo';
+  $('cPinMsg').textContent=msg||(pinStage==='new'?'Fica guardado só neste aparelho':'');$('cPinMsg').classList.toggle('bad',!!bad);
+  $('cPinDots').innerHTML=[0,1,2,3].map(i=>`<i class="${i<pinBuf.length?'on':''}"></i>`).join('');
+  $('cPinDots').classList.toggle('shake',!!bad);
+}
+function pinKey(k){
+  if(k==='x'){pinClose();return}
+  if(k==='<'){pinBuf=pinBuf.slice(0,-1);pinDraw();return}
+  if(pinBuf.length>=4)return;pinBuf+=k;pinDraw();if(pinBuf.length<4)return;
+  setTimeout(()=>{
+    if(pinStage==='enter'){if(pinBuf===getPin()){pinClose();cUnlocked=true;cTouch();renderCentral()}else{pinBuf='';pinDraw('PIN errado',true)}}
+    else if(pinStage==='new'){pinFirst=pinBuf;pinBuf='';pinStage='confirm';pinDraw()}
+    else{if(pinBuf===pinFirst){setPin(pinBuf);pinClose();cUnlocked=true;cTouch();renderCentral();toast('PIN criado ✓')}else{pinBuf='';pinFirst='';pinStage='new';pinDraw('Não bateu. Crie de novo.',true)}}
+  },150);
+}
+$('cPin').addEventListener('click',e=>{const b=e.target.closest('[data-pk]');if(b)pinKey(b.dataset.pk);else if(e.target.id==='cPin')pinClose()});
+/* toques na Central */
+$('central').addEventListener('pointerdown',cTouch);
+$('cBody').addEventListener('click',e=>{
+  const at=e.target.closest('[data-catt]');
+  if(at){if(!cUnlocked)return;const j=findJob(at.dataset.catt);if(j)setAtt(j,at.dataset.n,at.dataset.s);renderCentral();return}
+  const act=e.target.closest('[data-cact]');
+  if(act){const k=act.dataset.cact;
+    if(k==='unlock'){pinOpen();return}
+    if(!cUnlocked)return;const j=findJob(act.dataset.cj2);if(!j)return;
+    if(k==='left'){j.left=j.left?0:Date.now();openLeft.delete(j.id);saveDay();if(j.left&&j.allWeek)copyJobToNext(j,{});renderJobs();renderCentral();toast(j.left?'✓ '+(tidy(j.company)||'Obra')+' despachada':'Despacho desfeito')}
+    else if(k==='edit'){const id=j.id;cUnlocked=false;clearTimeout(cIdle);closeCentral();tab('day');$('cBack').hidden=false;backIdle();
+      openLeft.set(id,true);renderJobs();setTimeout(()=>{const card=document.querySelector('.job[data-id="'+id+'"]');if(card)card.scrollIntoView({block:'start',behavior:'smooth'})},50)}
+    return}
+  const r=e.target.closest('[data-cj]');if(!r)return;const id=r.dataset.cj;cOpen.has(id)?cOpen.delete(id):cOpen.add(id);renderCentral();
+});
+$("cLockBtn").onclick=cRelock;
+/* voltar pra Central (depois de abrir o editor por ela): botão e volta sozinho após 3 min parado */
+function backIdle(){clearTimeout(cBackIdle);if($('cBack').hidden)return;cBackIdle=setTimeout(()=>{if(!$('cBack').hidden&&!typing())backToCentral();else backIdle()},180000)}
+function backToCentral(){$('cBack').hidden=true;clearTimeout(cBackIdle);openCentral()}
+$('cBack').onclick=backToCentral;
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,()=>{if(!centralOn)backIdle()},true));
+if($('cPinReset'))$('cPinReset').onclick=()=>{setPin('');toast('PIN da Central apagado neste aparelho. Na próxima vez, crie outro.')};
 /* ---------- Relatório do dia (pro patrão) ---------- */
 const hm=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
 function buildReport(){

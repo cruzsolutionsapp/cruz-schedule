@@ -199,6 +199,7 @@
           <div class="lrow"><span class="wname" id="who"></span><button class="btn" id="logout">Sair</button></div>
           <button class="btn" id="openTotem" hidden style="margin-top:8px">🖥️ Abrir modo Totem (check-in)</button>
           <button class="btn" id="openCentral" hidden style="margin-top:8px">📺 Abrir Central (tela do escritório)</button>
+          <button class="linkbtn" id="cPinReset" style="margin-top:6px">Apagar o PIN da Central neste aparelho</button>
         </div>
         <div class="panel">
           <h2>Relatório do dia</h2>
@@ -273,13 +274,18 @@
     <div class="logo tlogo" role="img" aria-label="Cruz Solutions"></div>
     <div class="cclock"><b id="cClock"></b><span id="cDate"></span></div>
     <div class="cbtns">
-      <div class="cswitch" id="cSwitch" title="Jeito de mostrar"><button data-lay="A">A</button><button data-lay="B">B</button><button data-lay="C">C</button></div>
+      <button class="btn cunlocked" id="cLockBtn" hidden>🔓 Trancar</button>
       <button class="btn texit" id="cFull">⛶ Tela cheia</button><button class="btn texit" id="cExit">Sair</button>
     </div>
   </div>
   <div class="cpills" id="cStats"></div>
   <div class="cbody" id="cBody"></div>
+  <div class="tmodal" id="cPin" hidden><div class="tcard cpin" role="dialog" aria-modal="true" aria-labelledby="cPinTitle">
+    <h2 id="cPinTitle">Digite o PIN</h2><div class="cpdots" id="cPinDots"></div><p class="cpmsg" id="cPinMsg"></p>
+    <div class="cpad"><button data-pk="1">1</button><button data-pk="2">2</button><button data-pk="3">3</button><button data-pk="4">4</button><button data-pk="5">5</button><button data-pk="6">6</button><button data-pk="7">7</button><button data-pk="8">8</button><button data-pk="9">9</button><button data-pk="x" class="cpx">Cancelar</button><button data-pk="0">0</button><button data-pk="<" class="cpx" aria-label="Apagar">⌫</button></div>
+  </div></div>
 </div>
+<button class="btn primary cback" id="cBack" hidden>📺 Voltar pra Central</button>
 <div class="modal" id="calDay" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cdTitle">
     <div class="sheethead"><h2 id="cdTitle">Dia</h2><button class="icon-btn" id="cdClose" aria-label="Fechar">×</button></div>
