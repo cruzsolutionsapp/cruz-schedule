@@ -102,6 +102,7 @@ function watchDay(){
   renderJobs();
   watchPhotos();
   watchAtt();
+  watchOff();
   unsubDay=db.doc(path).onSnapshot(snap=>{
     if(path!==dayPath(cur))return;
     if(pend[path])return;
@@ -137,6 +138,13 @@ function buildMsg(){
     return L.join('\n');
   }).join('\n');
 }
+/* ---------- Day off (marcado no Calendário, só admin): dayoff/AAAA-MM-DD {date, people{nome:{by,at}}} ---------- */
+let OFF={},offUnsub=null,CALOFF={},calOffUnsub=null;
+function watchOff(){if(offUnsub){offUnsub();offUnsub=null}OFF={};
+  offUnsub=db.doc('dayoff/'+cur).onSnapshot(sn=>{const d=sn.exists?sn.data():null;OFF=(d&&d.people)||{};if(dayLoaded){if(typing())deferred=true;else renderJobs()}},e=>console.error(e))}
+const offOf=(map,name)=>Object.keys(map||{}).some(n=>nkey(n)===nkey(name));
+const isOff=name=>offOf(OFF,name);
+const offMsg=name=>`🌴 ${tidy(name)} está de day off neste dia. Pra escalar, tire o day off no Calendário.`;
 function analyze(){
   const byName={},byVeh={};
   D.jobs.forEach(j=>j.crew.forEach(c=>{
@@ -147,6 +155,7 @@ function analyze(){
   const out=[];
   dupNames.forEach(k=>{const n=D.jobs.flatMap(j=>j.crew).find(c=>c.name.trim().toLowerCase()===k).name;out.push(['bad',`${n} está em ${byName[k].length} obras: ${byName[k].join(', ')}`])});
   Object.keys(byVeh).filter(v=>byVeh[v].length>1).forEach(v=>out.push(['bad',`Veículo ${v} está em ${byVeh[v].length} obras: ${byVeh[v].join(', ')}`]));
+  D.jobs.forEach(j=>j.crew.filter(c=>isOff(c.name)).forEach(c=>out.push(['bad',`🌴 ${c.name} está de day off neste dia, mas está em ${j.company||'uma obra'}. Tire ele da obra (ou tire o day off no Calendário).`])));
   D.jobs.forEach(j=>{
     const nm=j.company||'Obra sem nome';
     if(j.need&&j.crew.length<j.need){const f=j.need-j.crew.length;out.push(['bad',`${nm}: falta${f>1?'m':''} ${f} pessoa${f>1?'s':''} (${j.crew.length} de ${j.need})`])}
@@ -157,7 +166,7 @@ function analyze(){
     if(!j.waiting&&!j.address.trim())out.push(['warn',`${nm}: falta endereço (ou marque "Esperando")`]);
   });
   const miss=D.jobs.reduce((s,j)=>s+Math.max(0,(j.need||0)-j.crew.length),0);
-  if(miss){const a=assignedSet();const free=S.workers.filter(w=>!a.has(w.toLowerCase())).length;
+  if(miss){const a=assignedSet();const free=S.workers.filter(w=>!a.has(w.toLowerCase())&&!isOff(w)).length;
     const p=n=>n+(n===1?' pessoa':' pessoas');
     out.unshift(free>=miss?['warn',`No total faltam ${p(miss)}. Ainda tem ${free} livre${free===1?'':'s'} no cadastro pra completar.`]
       :['bad',`No total faltam ${p(miss)} e só ${free===0?'ninguém está livre':free+(free===1?' está livre':' estão livres')} no cadastro. Precisa de ${p(miss-free)} extra.`]);}
@@ -324,17 +333,19 @@ function renderJobs(){
   const jobs=D.jobs;
   $('jobs').innerHTML=jobs.length?jobs.map((j,i)=>{
     const crew=j.crew.map((c,ci)=>`<div class="member${dupNames.includes(c.name.trim().toLowerCase())?' dup':''}">
-        <span class="nm">${attBadge(j,c)}${esc(c.name)}${isDriverName(c.name)?' <span class="drvmini" title="Motorista">🔑</span>':''}</span>
+        <span class="nm">${attBadge(j,c)}${isOff(c.name)?'<span class="offtag" title="Day off">🌴</span>':''}${esc(c.name)}${isDriverName(c.name)?' <span class="drvmini" title="Motorista">🔑</span>':''}</span>
         ${P.escala?attMini(j,c):''}
         <select data-act="veh" data-ci="${ci}" aria-label="Veículo de ${esc(c.name)}" id="vs-${j.id}-${ci}">${vehOptions(c.v)}</select>
         <span class="mord"><button class="mv" data-act="mup" data-ci="${ci}" aria-label="Subir ${esc(c.name)}"${ci===0?' disabled':''}>↑</button><button class="mv" data-act="mdown" data-ci="${ci}" aria-label="Descer ${esc(c.name)}"${ci===j.crew.length-1?' disabled':''}>↓</button></span>
         <button class="x" data-act="rm" data-ci="${ci}" aria-label="Tirar ${esc(c.name)}">×</button></div>`).join('')||'<div class="empty">Ninguém escalado ainda.</div>';
     let picker='';
     if(openPick===j.id){
-      const free=S.workers.filter(w=>!assigned.has(w.toLowerCase()));
-      const busyW=S.workers.filter(w=>assigned.has(w.toLowerCase())&&!j.crew.some(c=>c.name.toLowerCase()===w.toLowerCase()));
+      const free=S.workers.filter(w=>!assigned.has(w.toLowerCase())&&!isOff(w));
+      const offW=S.workers.filter(w=>isOff(w)&&!j.crew.some(c=>c.name.toLowerCase()===w.toLowerCase()));
+      const busyW=S.workers.filter(w=>assigned.has(w.toLowerCase())&&!isOff(w)&&!j.crew.some(c=>c.name.toLowerCase()===w.toLowerCase()));
       picker=`<div class="picker">
         <div class="chips">${free.map(w=>`<button class="chip" data-act="pick" data-name="${esc(w)}">${esc(w)}</button>`).join('')||'<span class="empty">Todos os fixos já estão escalados.</span>'}</div>
+        ${offW.length?`<div class="offrow"><span class="hint">🌴 Day off:</span> ${offW.map(w=>`<button class="chip off" data-act="pickoff" data-name="${esc(w)}">🌴 ${esc(w)}</button>`).join('')}</div>`:''}
         ${busyW.length?`<details><summary class="hint">Já escalados em outra obra (${busyW.length})</summary><div class="chips" style="margin-top:6px">${busyW.map(w=>`<button class="chip busy" data-act="pick" data-name="${esc(w)}">${esc(w)}</button>`).join('')}</div></details>`:''}
         <div class="extra"><input id="extra-${j.id}" placeholder="Nome extra (não cadastrado)"><button class="btn" data-act="extra">Adicionar</button></div>
         <button class="btn" data-act="pickclose">Pronto</button></div>`;
@@ -390,8 +401,8 @@ function refresh(save=true){
   $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('');
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
   if(viewer)$('msgTitle').innerHTML='Escala <small>'+esc(dateBR())+'</small>';
-  const a=assignedSet();const free=S.workers.filter(w=>!a.has(w.toLowerCase()));
-  $('free').innerHTML=free.map(w=>`<span class="chip">${esc(w)}</span>`).join('')||'<span class="empty">Todos os fixos estão escalados.</span>';
+  const a=assignedSet();const free=S.workers.filter(w=>!a.has(w.toLowerCase())&&!isOff(w));const offs=Object.keys(OFF);
+  $('free').innerHTML=(free.map(w=>`<span class="chip">${esc(w)}</span>`).join('')||'<span class="empty">Todos os fixos estão escalados.</span>')+(offs.length?`<div class="offrow"><span class="hint">🌴 Day off:</span> ${offs.map(w=>`<span class="chip off">🌴 ${esc(w)}</span>`).join('')}</div>`:'');
   $('freeCount').textContent=free.length+' de '+S.workers.length;
   if(!(document.activeElement&&document.activeElement.classList.contains('ntphone')))renderNotify();
   renderPhotos();
@@ -461,8 +472,9 @@ $('jobs').addEventListener('click',e=>{
   else if(act==='mup'||act==='mdown'){const a=+b.dataset.ci,t=act==='mup'?a-1:a+1;if(t<0||t>=j.crew.length)return;[j.crew[a],j.crew[t]]=[j.crew[t],j.crew[a]]}
   else if(act==='pickopen'){openPick=j.id;changed=false}
   else if(act==='pickclose'){openPick=null;changed=false}
-  else if(act==='pick'){const n=b.dataset.name;if(!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:autoVeh(n,j)})}
-  else if(act==='extra'){const inp=$('extra-'+j.id);const n=fmtName(inp.value);if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:autoVeh(n,j)})}
+  else if(act==='pickoff'){toast(offMsg(b.dataset.name));return}
+  else if(act==='pick'){const n=b.dataset.name;if(isOff(n)){toast(offMsg(n));return}if(!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:autoVeh(n,j)})}
+  else if(act==='extra'){const inp=$('extra-'+j.id);const n=fmtName(inp.value);if(n&&isOff(n)){toast(offMsg(n));return}if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:autoVeh(n,j)})}
   else if(act==='up'&&i>0){jobs.splice(i,1);jobs.splice(i-1,0,j)}
   else if(act==='down'&&i<jobs.length-1){jobs.splice(i,1);jobs.splice(i+1,0,j)}
   else if(act==='left'){j.left=j.left?0:Date.now();openLeft.delete(j.id);if(j.left&&j.allWeek){saveDay();copyJobToNext(j,b)}}   // All Week: ao confirmar a saída, já vai pro dia seguinte
@@ -700,9 +712,10 @@ async function allAttendance(){const out=[];let after='';
   for(;;){let q=db.collection('attendance');if(after)q=q.where('date','>',after);const s=await q.orderBy('date','asc').limit(500).get();
     s.docs.forEach(d=>{const x=d.data();if(x){const {at,...r}=x;out.push(Object.assign({_id:d.id},r))}});if(s.size<500)break;after=s.docs[s.size-1].data().date}
   return out}
-$('bkFull').onclick=async e=>{const btn=e.currentTarget;flushAll();let days,attendance=[];try{days=await allDays()}catch(err){toast('Não consegui ler as escalas');return}
+$('bkFull').onclick=async e=>{const btn=e.currentTarget;flushAll();let days,attendance=[],dayoff=[];try{days=await allDays()}catch(err){toast('Não consegui ler as escalas');return}
   try{attendance=await allAttendance()}catch(err){console.error(err)}
-  await offer('cruz-schedule-backup-'+iso(new Date())+'.json',JSON.stringify({app:'cruz-schedule',version:2,exportedAt:new Date().toISOString(),roster:Object.assign({},S,P.telefones?{phones:PH}:{}),days,attendance},null,1),btn)};
+  try{dayoff=(await db.collection('dayoff').get()).docs.map(d=>d.data())}catch(err){console.error(err)}
+  await offer('cruz-schedule-backup-'+iso(new Date())+'.json',JSON.stringify({app:'cruz-schedule',version:2,exportedAt:new Date().toISOString(),roster:Object.assign({},S,P.telefones?{phones:PH}:{}),days,attendance,dayoff},null,1),btn)};
 let pendingImport=null;
 $('importFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
   try{const o=JSON.parse(await f.text());if(!o||o.app!=='cruz-schedule'||!o.roster||!Array.isArray(o.days))throw 0;
@@ -718,6 +731,7 @@ $('importInfo').addEventListener('click',async e=>{
     if(P.telefones&&pendingImport.roster.phones){PH={...pendingImport.roster.phones};lastSent[PHONES]=stable({phones:PH});await db.doc(PHONES).set({phones:PH})}
     for(const d of pendingImport.days){if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d.date))await db.doc(dayPath(d.date)).set({date:d.date,jobs:d.jobs||[],sent:d.sent||{},drivers:d.drivers||{}})}
     for(const a of (pendingImport.attendance||[])){if(a&&a._id&&a.date&&a.jobId){const {_id,...r}=a;await db.doc('attendance/'+_id).set(r)}}
+    for(const o of (pendingImport.dayoff||[])){if(o&&/^\d{4}-\d{2}-\d{2}$/.test(o.date)&&o.people)await db.doc('dayoff/'+o.date).set({date:o.date,people:o.people})}
     toast('Importação concluída');pendingImport=null;$('importInfo').hidden=true;renderRoster();watchDay();
   }catch(err){console.error(err);toast('Falhou a importação: '+(err&&err.code||'erro'))}
 });
@@ -1214,8 +1228,11 @@ function calRange(){const f=new Date(calMonth);f.setDate(1-f.getDay());const l=n
 function loadCal(){
   if(calUnsub){calUnsub();calUnsub=null}
   const [f,l]=calRange();CALDAYS={};renderCal();
+  if(calOffUnsub){calOffUnsub();calOffUnsub=null}CALOFF={};
+  calOffUnsub=db.collection('dayoff').where('date','>=',iso(f)).where('date','<=',iso(l)).onSnapshot(s=>{CALOFF={};s.docs.forEach(d=>{const x=d.data();if(x&&x.date)CALOFF[x.date]=x.people||{}});renderCal();if(calSel)renderCalDay()},e=>console.error(e));
   calUnsub=db.collection('days').where('date','>=',iso(f)).where('date','<=',iso(l)).onSnapshot(s=>{CALDAYS={};s.docs.forEach(d=>{const x=d.data();if(x&&x.date)CALDAYS[x.date]=x});renderCal();if(calSel)renderCalDay()},e=>console.error(e));
 }
+const dayOff=date=>Object.keys((date===cur?OFF:CALOFF[date])||{});
 function dayJobs(date){if(date===cur&&dayLoaded)return D.jobs;return (CALDAYS[date]&&CALDAYS[date].jobs)||[]}
 function renderCal(){
   $('calTitle').textContent=MESES[calMonth.getMonth()]+' '+calMonth.getFullYear();
@@ -1223,7 +1240,7 @@ function renderCal(){
   let html=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d=>`<div class="calwd">${d}</div>`).join('');
   for(let i=0;i<42;i++){const d=new Date(f);d.setDate(f.getDate()+i);const ds=iso(d);const jobs=dayJobs(ds);const n=reserved(jobs);const lv=levelOf(n);
     html+=`<button class="calday${d.getMonth()!==calMonth.getMonth()?' out':''}${ds===today?' today':''}${ds===cur?' cur':''}" data-cal="${ds}" aria-label="${esc(dateBR(ds))}">
-      <span class="cdtop"><span class="cdnum">${d.getDate()}</span>${n?`<i class="cddot ${lv}"></i>`:''}</span>
+      <span class="cdtop"><span class="cdnum">${d.getDate()}</span>${dayOff(ds).length?`<span class="cdoff" title="Day off">🌴${dayOff(ds).length}</span>`:''}${n?`<i class="cddot ${lv}"></i>`:''}</span>
       ${jobs.slice(0,3).map(j=>`<span class="cdjob">${esc(j.company||'Obra')}</span>`).join('')}${jobs.length>3?`<span class="cdmore">+${jobs.length-3}</span>`:''}
       </button>`}
   $('calGrid').innerHTML=html;
@@ -1238,11 +1255,15 @@ function renderCalDay(){
   if(!calSel)return;const jobs=dayJobs(calSel);const n=reserved(jobs),tot=S.workers.length,lv=levelOf(n);
   $('cdTitle').textContent=dateBR(calSel);
   const inCrew=new Set();jobs.forEach(j=>(j.crew||[]).forEach(c=>inCrew.add(nkey(c.name))));
-  const freeNames=S.workers.filter(w=>!inCrew.has(nkey(w)));
+  const offs=dayOff(calSel);const freeNames=S.workers.filter(w=>!inCrew.has(nkey(w))&&!offOf((calSel===cur?OFF:CALOFF[calSel]),w));
   const pend=jobs.reduce((s,j)=>s+Math.max(0,(+j.need||0)-(j.crew||[]).length),0);
   const freeHTML=S.workers.length?`<div class="cdfreenames"><b>Sem escala neste dia (${freeNames.length})</b>${pend?`<small> · ainda faltam ${pend} vaga${pend===1?'':'s'} pra preencher nas obras</small>`:''}
     <div class="chips">${freeNames.map(w=>`<span class="chip">${esc(w)}</span>`).join('')||'<span class="empty">Todo mundo está escalado.</span>'}</div></div>`:'';
-  $('cdCount').innerHTML=`<div class="cdtotal ${lv||'ok'}">👷 <b>${n}</b> pessoa${n===1?'':'s'} reservada${n===1?'':'s'} de <b>${tot}</b> no cadastro${n>tot?` · <b>faltam ${n-tot}</b>`:tot-n>0?` · sobram ${tot-n}`:''}</div>`+freeHTML;
+  const offHTML=(offs.length||isAdmin)?`<div class="cdoffbox"><b>🌴 Day off</b>${isAdmin?'':' <small>(só o administrador marca)</small>'}
+    <div class="chips">${offs.map(w=>`<span class="chip off">🌴 ${esc(w)}${isAdmin?` <button class="offx" data-offrm="${esc(w)}" aria-label="Tirar day off de ${esc(w)}">×</button>`:''}</span>`).join('')||'<span class="empty">Ninguém de day off.</span>'}</div>
+    ${isAdmin?`<div class="offform"><select id="offWho" aria-label="Funcionário"><option value="">Escolha o funcionário…</option>${S.workers.filter(w=>!offs.some(o=>nkey(o)===nkey(w))).map(w=>`<option>${esc(w)}</option>`).join('')}</select>
+      <label class="offuntil">até <input type="date" id="offUntil" min="${calSel}" aria-label="Até que dia (opcional)"></label><button class="btn primary" id="offAdd">Marcar day off</button></div>`:''}</div>`:'';
+  $('cdCount').innerHTML=offHTML+`<div class="cdtotal ${lv||'ok'}">👷 <b>${n}</b> pessoa${n===1?'':'s'} reservada${n===1?'':'s'} de <b>${tot}</b> no cadastro${n>tot?` · <b>faltam ${n-tot}</b>`:tot-n>0?` · sobram ${tot-n}`:''}</div>`+freeHTML;
   $('cdList').innerHTML=jobs.length?`<div class="cdjobs">${jobs.map(j=>`<div class="cdj"><div><b>${esc(j.company||'Obra')}</b>${j.allWeek?' <span class="wkbadge">All Week</span>':''}<small>${esc(j.waiting||!j.address?'Endereço a confirmar':j.address)}</small></div>
       <span class="cdjn">${esc(fmt(j.start)||'')} · ${(j.crew||[]).length}${j.need?' de '+j.need:''} pessoas</span></div>`).join('')}</div>
       <button class="btn" id="cdOpen">Abrir na escala do dia →</button>`:'<p class="empty">Nada agendado neste dia.</p>';
@@ -1290,12 +1311,35 @@ $('cdForm').addEventListener('submit',async e=>{e.preventDefault();if(!P.escala)
 ['cdNeed','cdUntil','cdSkipWknd'].forEach(id=>$(id).addEventListener('input',cdCheck));
 $('cdAllWeek').addEventListener('change',e=>{e.target.dataset.touched='1'});
 $('cdCo').addEventListener('change',()=>{const list=coAddrs($('cdCo').value);$('cdAddrList').innerHTML=list.map(a=>`<option value="${esc(a)}">`).join('');if(list.length===1&&!$('cdAddr').value)$('cdAddr').value=list[0]});
+// Day off: só o admin marca/tira (regras do banco conferem)
+$('calDay').addEventListener('click',async e=>{
+  if(!isAdmin||!calSel)return;
+  const rm=e.target.closest('[data-offrm]');
+  if(rm){const name=rm.dataset.offrm,ds=calSel;try{const sn=await db.doc('dayoff/'+ds).get();const people=Object.assign({},(sn.exists&&sn.data().people)||{});
+      Object.keys(people).forEach(n=>{if(nkey(n)===nkey(name))delete people[n]});
+      if(Object.keys(people).length)await db.doc('dayoff/'+ds).set({date:ds,people});else await db.doc('dayoff/'+ds).delete();
+      toast('Day off de '+tidy(name)+' retirado')}catch(err){console.error(err);toast('Não consegui tirar ('+(err.code||'erro')+')')}return}
+  if(e.target.id!=='offAdd')return;
+  const who=$('offWho').value;if(!who){toast('Escolha o funcionário');return}
+  const until=$('offUntil').value;const dates=[];const [y,m,d]=calSel.split('-').map(Number);
+  for(let i=0;i<62;i++){const ds=iso(new Date(y,m-1,d+i));if(i&&(!until||ds>until))break;dates.push(ds)}
+  const btn=e.target;btn.disabled=true;
+  try{const busy=[];
+    for(const ds of dates){const sn=await db.doc('dayoff/'+ds).get();const people=Object.assign({},(sn.exists&&sn.data().people)||{});
+      people[who]={by:(ctx&&ctx.email)||'',at:Date.now()};await db.doc('dayoff/'+ds).set({date:ds,people});
+      const jobs=ds===cur&&dayLoaded?D.jobs:((await db.doc(dayPath(ds)).get()).data()||{}).jobs||[];
+      const j=jobs.find(x=>(x.crew||[]).some(c=>nkey(c.name)===nkey(who)));if(j)busy.push(dateBR(ds)+' ('+(j.company||'obra')+')')}
+    toast(`🌴 Day off marcado: ${who}${dates.length>1?' · '+dates.length+' dias':''}`);
+    if(busy.length)setTimeout(()=>toast(`⚠️ ${who} já estava escalado: ${busy.join(', ')}. Tire ele da obra.`),2600);
+  }catch(err){console.error(err);toast('Não consegui marcar ('+(err.code||'erro')+')')}
+  finally{btn.disabled=false}
+});
 // passar o mouse no dia: mostra pessoas lá em cima, no lugar da legenda
-const LEGEND=()=>`<i class="cl ok"></i>folga <i class="cl warn"></i>quase no limite <i class="cl bad"></i>faltam <span class="hint">· passe o mouse num dia</span>`;
+const LEGEND=()=>`<i class="cl ok"></i>sobra gente <i class="cl warn"></i>quase no limite <i class="cl bad"></i>faltam <span class="hint">· passe o mouse num dia</span>`;
 function calInfo(ds){const el=$('calInfo');if(!ds){el.innerHTML=LEGEND();el.className='callegend';return}
-  const n=reserved(dayJobs(ds)),tot=S.workers.length,free=tot-n,lv=levelOf(n)||'ok';
+  const n=reserved(dayJobs(ds)),tot=S.workers.length,offN=dayOff(ds).length,free=tot-n-offN,lv=levelOf(n+offN)||'ok';
   el.className='callegend info '+lv;
-  el.innerHTML=`<b>${esc(dateBR(ds))}</b> · ${tot} funcionários · ${n} reservado${n===1?'':'s'} · <b>${free>=0?free+' livre'+(free===1?'':'s'):'faltam '+(-free)}</b>`}
+  el.innerHTML=`<b>${esc(dateBR(ds))}</b> · ${tot} funcionários · ${n} reservado${n===1?'':'s'}${offN?` · 🌴 ${offN} day off`:''} · <b>${free>=0?free+' livre'+(free===1?'':'s'):'faltam '+(-free)}</b>`}
 $('calGrid').addEventListener('mouseover',e=>{const b=e.target.closest('[data-cal]');calInfo(b&&b.dataset.cal)});
 $('calGrid').addEventListener('mouseleave',()=>calInfo(null));
 $('calGrid').addEventListener('click',e=>{const b=e.target.closest('[data-cal]');if(b)openCalDay(b.dataset.cal)});

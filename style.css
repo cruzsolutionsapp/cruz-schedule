@@ -560,3 +560,15 @@ body.viewer{padding-bottom:24px}
 .ctile2.tmr{border-left-color:var(--hivis);cursor:default}
 .t2warn{color:var(--warn);font-weight:700}
 .cdots i.t{border:2px solid var(--hivis);background:transparent} .cdots i.t.on{background:var(--hivis)}
+/* Day off */
+.chip.off{background:var(--warn-soft);border-color:var(--warn);color:var(--warn);opacity:.9}
+.offrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+.offtag{margin-right:3px}
+.cdoff{font-size:11px;font-weight:700;color:var(--warn);margin-left:auto;margin-right:4px}
+.cdoffbox{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;padding:10px 12px;border:1px dashed var(--warn);border-radius:10px;background:var(--warn-soft)}
+.cdoffbox small{color:var(--muted);font-weight:400}
+.cdoffbox .chips{display:flex;flex-wrap:wrap;gap:6px}
+.offx{border:0;background:none;color:inherit;font-weight:700;cursor:pointer;padding:0 0 0 4px;font-size:15px}
+.offform{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.offform select,.offform input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 8px;min-width:0}
+.offuntil{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:14px}

@@ -210,6 +210,7 @@ function demoSeed() {
     'config/phones': { phones: { 'Carlos Lima': '(508) 555-0101', 'João Pereira': '(508) 555-0102', 'André Costa': '(508) 555-0103', 'Paulo Ribeiro': '(508) 555-0104' } },
     ['days/' + today]: { date: today, jobs, sent: {}, drivers },
     ...nextDays(),
+    ...(() => { const d = new Date(); d.setDate(d.getDate() + 1); const ds = iso(d); return { ['dayoff/' + ds]: { date: ds, people: { 'João Pereira': { by: 'demo', at: 0 } } } }; })(),
     ['days/' + yest]: { date: yest, jobs: [jobs[0]], sent: {}, drivers: { d1: ['Carlos Lima'] } },
     ['attendance/' + today + '_d1']: { date: today, jobId: 'd1', company: 'ABC Restoration', driver: 'Carlos Lima', by: 'demo', people: { 'Carlos Lima': 'in', 'João Pereira': 'in', 'Marcos Souza': 'in', 'Rafael Alves': 'out' }, times: { 'Carlos Lima': t('06:02'), 'João Pereira': t('06:09'), 'Marcos Souza': t('06:21') }, atMs: t('06:25') }
   };

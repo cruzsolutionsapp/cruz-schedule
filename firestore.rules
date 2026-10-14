@@ -117,6 +117,12 @@ service cloud.firestore {
         && request.resource.data.people is map;
     }
 
+    // Day off: todo mundo do app vê; só o administrador marca/tira (pelo Calendário)
+    match /dayoff/{day} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+
     // Escala de cada dia
     match /days/{day} {
       allow read: if isMember();
