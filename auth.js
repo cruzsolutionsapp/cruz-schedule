@@ -143,7 +143,7 @@ async function route(u) {
   setupMembers(isAdmin, me);
 }
 /* ----- link de demonstração (#demo): dados inventados na memória, sem login, nada é salvo ----- */
-const DEMO = location.hash === '#demo' || location.hash === '#demo-central';
+const DEMO = location.hash === '#demo' || location.hash.startsWith('#demo-central');
 if (DEMO) startDemo(); else onAuthStateChanged(auth, route);
 
 function memDb(seed) {
@@ -184,6 +184,14 @@ function demoSeed() {
     job('d2', 'Blue Line Builders', '210 Main Street, Worcester, MA', '06:00', '07:00', 30, [['André Costa', '52'], 'Felipe Rocha', 'Lucas Martins', ['Bruno Dias', 'own']], { need: 5 }),
     job('d3', 'Coastal Demo Co', '', '05:30', '07:30', null, [['Paulo Ribeiro', '54'], 'Thiago Gomes', 'Vitor Melo'], { waiting: true, autoShop: false, travel: null })
   ];
+  if (location.hash === '#demo-central-cheio') {   // dia cheio de exemplo, pra testar o painel com muitas obras
+    const cos = ['Harbor Homes', 'Metro Interiors', 'Summit Builders', 'Pioneer Restoration', 'Green Valley Co', 'North Shore Demo', 'Atlas Contractors', 'Bay State Renovations', 'Keystone Group', 'Liberty Builders', 'Granite Works', 'Riverside Homes', 'Evergreen Const.', 'Patriot Demo', 'Colonial Remodel', 'Beacon Hill Co', 'Charles River Inc'];
+    const towns = ['Natick', 'Boston', 'Newton', 'Milford', 'Hopkinton', 'Quincy', 'Waltham', 'Marlborough', 'Ashland', 'Medway', 'Franklin', 'Dedham', 'Needham', 'Sudbury', 'Wellesley', 'Brookline', 'Cambridge'];
+    const ppl = ['Gabriel Teixeira', 'Eduardo Nunes', 'Ana Paula', 'Ricardo Lopes', 'Sérgio Mota', 'Igor Freitas', 'Wesley Pinto'];
+    cos.forEach((c, i) => { const h = 5 + Math.floor(i / 3), m = (i % 3) * 20; const shop = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      jobs.push(job('x' + i, c, (10 + i) + ' Main St, ' + towns[i] + ', MA', shop, String(h + 1).padStart(2, '0') + ':' + String(m).padStart(2, '0'), 30,
+        ppl.slice(0, 2 + (i % 4)).map((n, k) => k ? n + ' ' + (i + 1) : [n + ' ' + (i + 1), String(60 + i)]), i % 3 === 0 ? { left: new Date(today + 'T' + shop + ':00').getTime() + 15 * 60000 } : (i % 5 === 1 ? { need: 6 } : {}))); });
+  }
   const drivers = {}; jobs.forEach(j => { const n = j.crew.filter(c => c.v && c.v !== 'own').map(c => c.name); if (n.length) drivers[j.id] = n; });
   const t = h => new Date(today + 'T' + h + ':00').getTime();
   const nextDays = () => { const o = {}; [[1, [['Blue Line Builders', 6], ['Harbor Homes', 4]]], [2, [['ABC Restoration', 5], ['Blue Line Builders', 8]]], [3, [['Coastal Demo Co', 12], ['Harbor Homes', 3]]], [6, [['ABC Restoration', 4]]]].forEach(([n, js]) => {

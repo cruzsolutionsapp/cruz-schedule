@@ -1018,10 +1018,10 @@ function closeCentral(){
   try{cLock&&cLock.release()}catch(e){}cLock=null;
   try{document.fullscreenElement&&document.exitFullscreen()}catch(e){}
   document.body.classList.remove('totem-on');$('central').hidden=true;
-  if(/central/.test(location.hash))history.replaceState(null,'',location.pathname+location.search+(location.hash==='#demo-central'?'#demo':''));
+  if(/central/.test(location.hash))history.replaceState(null,'',location.pathname+location.search+(location.hash.startsWith('#demo-central')?'#demo':''));
 }
 /* Central: um PIN (guardado só neste aparelho) destrava despachar, presença e abrir o editor. Tranca sozinha após 1 min parado. */
-const cOpen=new Set();let cUnlocked=false,cIdle=null,pinBuf='',pinStage='enter',pinFirst='',cBackIdle=null;
+const cOpen=new Set();let cPage=0,cPages=1,cDetail=null;let cUnlocked=false,cIdle=null,pinBuf='',pinStage='enter',pinFirst='',cBackIdle=null;
 const PINKEY='centralPin'+(ctx&&ctx.email==='demo@exemplo'?'-demo':'');
 const getPin=()=>{try{return localStorage.getItem(PINKEY)||''}catch(e){return ''}};
 const setPin=v=>{try{v?localStorage.setItem(PINKEY,v):localStorage.removeItem(PINKEY)}catch(e){}};
@@ -1057,13 +1057,40 @@ function renderCentral(){
     :`<div class="cacts"><button class="btn cbig2" data-cact="unlock">🔒 Alterar</button></div>`;
   const order=j=>j.left?2:lateMin(j)?0:1;
   const list=[...jobs].sort((a,b)=>order(a)-order(b)||String(a.shop||'').localeCompare(String(b.shop||'')));
-  $('cBody').innerHTML='<div class="crows">'+list.map(j=>{const st=stOf(j),open=cOpen.has(j.id),sub=[city(j),shortTxt(j)].filter(Boolean).join(' · ');
-    return `<div class="crow ${st}${open?' open':''}"><div class="crl" data-cj="${j.id}"><span class="cdot2"></span><div class="cn">${name(j)}<small>${sub}</small></div>
-      <div class="ct">${j.left?'saiu <b>'+esc(hm12(j.left))+'</b>':'shop <b>'+esc(fmt(j.shop)||'—')+'</b>'}</div>
-      <span class="cst ${st}">${st==='done'?'DESPACHADA':st==='late'?'⏱ '+lateTxt(j)+' atrasada':'AGUARDANDO'}</span>
-      <div class="cc">${people(j)}<small>pessoas</small></div></div>${open?crewList(j)+actions(j):''}</div>`}).join('')+'</div>'
-    +`<p class="chint">${cUnlocked?'🔓 Destravado · tranca sozinho depois de 1 minuto parado':'Toque numa obra pra ver a equipe'}</p>`;
+  const badge=j=>{const st=stOf(j);return `<span class="cst ${st}">${st==='done'?'DESPACHADA':st==='late'?'⏱ '+lateTxt(j)+' atrasada':'AGUARDANDO'}</span>`};
+  const when=j=>j.left?'saiu <b>'+esc(hm12(j.left))+'</b>':'shop <b>'+esc(fmt(j.shop)||'—')+'</b>';
+  const subOf=j=>[city(j),shortTxt(j)].filter(Boolean).join(' · ');
+  const hint=`<p class="chint">${cUnlocked?'🔓 Destravado · tranca sozinho depois de 1 minuto parado':'Toque numa obra pra ver a equipe'}</p>`;
+  // detalhe (quadradinhos): janela com a equipe e os botões
+  if(cDetail){const j=list.find(x=>x.id===cDetail);
+    if(!j){cDetail=null;$('cDet').hidden=true}
+    else{$('cDet').hidden=false;$('cDetBody').innerHTML=`<div class="cdh"><div class="cn">${name(j)}<small>${subOf(j)}</small></div><button class="icon-btn" data-cdclose aria-label="Fechar">×</button></div>
+      <div class="cdm">${when(j)} ${badge(j)} <span class="cc3">${people(j)} pessoas</span></div>${crewList(j)}${actions(j)}`}}
+  else $('cDet').hidden=true;
+  const body=$('cBody');
+  // 1) lista grande, se couber (ou se alguém abriu uma obra)
+  body.innerHTML='<div class="crows">'+list.map(j=>{const st=stOf(j),open=cOpen.has(j.id);
+    return `<div class="crow ${st}${open?' open':''}"><div class="crl" data-cj="${j.id}"><span class="cdot2"></span><div class="cn">${name(j)}<small>${subOf(j)}</small></div>
+      <div class="ct">${when(j)}</div>${badge(j)}<div class="cc">${people(j)}<small>pessoas</small></div></div>${open?crewList(j)+actions(j):''}</div>`}).join('')+'</div>'+hint;
+  if(cOpen.size||body.scrollHeight<=body.clientHeight+2){cPages=1;$('cDots').innerHTML='';return}
+  // 2) quadradinhos em colunas; 3) se ainda não couber, páginas que trocam sozinhas
+  cOpen.clear();
+  const w=body.clientWidth,cols=w>=1300?3:w>=720?2:1;
+  const tile=j=>{const st=stOf(j);return `<div class="ctile2 ${st}" data-cd="${j.id}"><div class="t2h"><span class="cdot2"></span><b>${name(j)}</b><span class="t2p">${people(j)} 👷</span></div>
+    <div class="t2s">${badge(j)}<span class="t2w">${when(j)}</span></div><div class="t2m">${subOf(j)||'&nbsp;'}</div></div>`};
+  body.innerHTML=`<div class="cgrid" style="--cols:${cols}">${list.map(tile).join('')}</div>`;
+  const first=body.querySelector('.ctile2'),gap=12;
+  const rows=Math.max(1,Math.floor((body.clientHeight+gap)/(first.offsetHeight+gap)));
+  const per=cols*rows;cPages=Math.max(1,Math.ceil(list.length/per));if(cPage>=cPages)cPage=0;
+  if(cPages===1){$('cDots').innerHTML='';return}
+  let h='';for(let p=0;p<cPages;p++)h+=`<div class="cgrid" data-page="${p}" style="--cols:${cols}"${p===cPage?'':' hidden'}>${list.slice(p*per,(p+1)*per).map(tile).join('')}</div>`;
+  body.innerHTML=h;cDotsDraw();
 }
+function cDotsDraw(){$('cDots').innerHTML=cPages>1?Array.from({length:cPages},(_,i)=>`<i class="${i===cPage?'on':''}"></i>`).join('')+`<span>página ${cPage+1} de ${cPages}</span>`:''}
+function cNextPage(){if(!centralOn||cPages<2||cDetail||!$('cPin').hidden)return;cPage=(cPage+1)%cPages;
+  document.querySelectorAll('#cBody [data-page]').forEach(g=>g.hidden=+g.dataset.page!==cPage);cDotsDraw()}
+setInterval(cNextPage,10000);
+window.addEventListener('resize',()=>{if(centralOn)renderCentral()});
 /* teclado do PIN */
 function pinOpen(){if(!P.escala){toast('Esse login é só pra ver. Pra alterar, a TV precisa entrar com um login do escritório.');return}
   pinBuf='';pinFirst='';pinStage=getPin()?'enter':'new';$('cPin').hidden=false;pinDraw()}
@@ -1087,7 +1114,9 @@ function pinKey(k){
 $('cPin').addEventListener('click',e=>{const b=e.target.closest('[data-pk]');if(b)pinKey(b.dataset.pk);else if(e.target.id==='cPin')pinClose()});
 /* toques na Central */
 $('central').addEventListener('pointerdown',cTouch);
-$('cBody').addEventListener('click',e=>{
+$('central').addEventListener('click',e=>{
+  if(e.target.closest('[data-cdclose]')||e.target.id==='cDet'){cDetail=null;renderCentral();return}
+  const td=e.target.closest('[data-cd]');if(td){cDetail=td.dataset.cd;renderCentral();return}
   const at=e.target.closest('[data-catt]');
   if(at){if(!cUnlocked)return;const j=findJob(at.dataset.catt);if(j)setAtt(j,at.dataset.n,at.dataset.s);renderCentral();return}
   const act=e.target.closest('[data-cact]');
@@ -1095,10 +1124,10 @@ $('cBody').addEventListener('click',e=>{
     if(k==='unlock'){pinOpen();return}
     if(!cUnlocked)return;const j=findJob(act.dataset.cj2);if(!j)return;
     if(k==='left'){j.left=j.left?0:Date.now();openLeft.delete(j.id);saveDay();if(j.left&&j.allWeek)copyJobToNext(j,{});renderJobs();renderCentral();toast(j.left?'✓ '+(tidy(j.company)||'Obra')+' despachada':'Despacho desfeito')}
-    else if(k==='edit'){const id=j.id;cUnlocked=false;clearTimeout(cIdle);closeCentral();tab('day');$('cBack').hidden=false;backIdle();
+    else if(k==='edit'){const id=j.id;cUnlocked=false;cDetail=null;clearTimeout(cIdle);closeCentral();tab('day');$('cBack').hidden=false;backIdle();
       openLeft.set(id,true);renderJobs();setTimeout(()=>{const card=document.querySelector('.job[data-id="'+id+'"]');if(card)card.scrollIntoView({block:'start',behavior:'smooth'})},50)}
     return}
-  const r=e.target.closest('[data-cj]');if(!r)return;const id=r.dataset.cj;cOpen.has(id)?cOpen.delete(id):cOpen.add(id);renderCentral();
+  const r=e.target.closest('#cBody [data-cj]');if(!r)return;const id=r.dataset.cj;cOpen.has(id)?cOpen.delete(id):cOpen.add(id);renderCentral();
 });
 $("cLockBtn").onclick=cRelock;
 /* voltar pra Central (depois de abrir o editor por ela): botão e volta sozinho após 3 min parado */
@@ -1344,6 +1373,6 @@ if(P.telefones)db.doc(PHONES).onSnapshot(remotePhones,e=>{console.error(e)});els
 setStatus('ok');
 watchDay();
 if((ctx&&ctx.totem)||(location.hash==='#totem'&&P.escala))openTotem();
-else if(location.hash==='#central'||location.hash==='#demo-central')openCentral();
+else if(location.hash==='#central'||location.hash.startsWith('#demo-central'))openCentral();
 return {flushAll};
 }

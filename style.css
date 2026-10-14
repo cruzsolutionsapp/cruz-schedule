@@ -527,3 +527,28 @@ body.viewer{padding-bottom:24px}
 .cback{position:fixed;right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:7;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 .central~.toast,.toast{z-index:60}
 @media (max-width:900px){.cacts{margin-left:28px}}
+/* Central: quadradinhos + páginas (painel de aeroporto) */
+.cgrid{display:grid;grid-template-columns:repeat(var(--cols,2),1fr);gap:12px;align-content:start}
+.cgrid[hidden]{display:none}
+.ctile2{background:var(--surface);border:1px solid var(--line);border-left:8px solid var(--bad);border-radius:14px;padding:12px 16px;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ctile2.done{border-left-color:var(--hivis);opacity:.8}
+.ctile2.wait{border-left-color:var(--bad-soft)}
+.ctile2 .cdot2{display:none}
+.t2h{display:flex;align-items:baseline;gap:10px;min-width:0}
+.t2h b{font-family:var(--f-display);font-size:1.45em;line-height:1.05;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t2p{font-family:var(--f-display);font-size:1.25em;white-space:nowrap}
+.t2s{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.t2s .cst{padding:4px 10px;font-size:.85em}
+.t2w{color:var(--muted)} .t2w b{color:var(--ink)}
+.t2m{color:var(--muted);font-size:.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cdots{display:flex;justify-content:center;align-items:center;gap:8px;min-height:0}
+.cdots:empty{display:none}
+.cdots i{width:12px;height:12px;border-radius:50%;background:var(--line)}
+.cdots i.on{background:var(--hivis)}
+.cdots span{color:var(--muted);font-size:.8em;margin-left:8px}
+.cdet{width:min(900px,100%);text-align:left;max-height:90vh;overflow-y:auto;font-size:clamp(15px,1.25vw,22px)}
+.cdh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.cdm{display:flex;align-items:center;gap:14px;flex-wrap:wrap;color:var(--muted);margin:4px 0 10px} .cdm b{color:var(--ink)}
+.cc3{font-weight:700;color:var(--ink)}
+.cdet .ccrew{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 12px}
+.cdet .cacts{margin-left:0}
