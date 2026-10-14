@@ -198,6 +198,7 @@
           <h2>Acesso</h2>
           <div class="lrow"><span class="wname" id="who"></span><button class="btn" id="logout">Sair</button></div>
           <button class="btn" id="openTotem" hidden style="margin-top:8px">🖥️ Abrir modo Totem (check-in)</button>
+          <button class="btn" id="openCentral" hidden style="margin-top:8px">📺 Abrir Central (tela do escritório)</button>
         </div>
         <div class="panel">
           <h2>Relatório do dia</h2>
@@ -266,6 +267,19 @@
   <input id="tSearch" class="tsearch" type="search" placeholder="Procurar meu nome" aria-label="Procurar nome" autocomplete="off">
   <div class="tbody" id="tBody"></div>
   <div class="tmodal" id="tModal" hidden><div class="tcard" id="tModalBody" role="dialog" aria-modal="true"></div></div>
+</div>
+<div class="central" id="central" hidden>
+  <div class="ctop">
+    <div class="logo tlogo" role="img" aria-label="Cruz Solutions"></div>
+    <div class="tclock"><b id="cClock"></b><span id="cDate"></span></div>
+    <div class="cbtns"><button class="btn texit" id="cFull">⛶ Tela cheia</button><button class="btn texit" id="cExit">Sair da Central</button></div>
+  </div>
+  <div class="cstats" id="cStats"></div>
+  <div class="cmain">
+    <div class="cjobs" id="cJobs"></div>
+    <aside class="caside"><h3>Avisos</h3><div id="cAlerts"></div></aside>
+  </div>
+  <div class="cnextwrap"><h3>Próximos dias</h3><div class="cnext" id="cNext"></div></div>
 </div>
 <div class="modal" id="calDay" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cdTitle">

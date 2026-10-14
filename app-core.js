@@ -71,7 +71,7 @@ function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.fo
 
 /* evita re-render enquanto a pessoa digita */
 function typing(){const a=document.activeElement;return a&&(a.tagName==='INPUT'||a.tagName==='SELECT')&&!a.id.startsWith('extra-')&&a.id!=='newWorker'}
-function rerender(){if(typing()){deferred=true;return}renderJobs();renderRoster()}
+function rerender(){if(typing()){deferred=true;return}renderJobs();renderRoster();renderCentral()}
 document.addEventListener('focusout',()=>setTimeout(()=>{if(deferred&&!typing()){deferred=false;renderJobs();renderRoster()}},0));
 
 function remoteRoster(snap){
@@ -730,7 +730,7 @@ function watchAtt(){
   ATT={};
   attUnsub=db.collection('attendance').where('date','==',cur).onSnapshot(s=>{
     ATT={};s.docs.forEach(d=>{const x=d.data();if(x&&x.jobId)ATT[x.jobId]=x});
-    renderPhotos();renderTotem();
+    renderPhotos();renderTotem();renderCentral();
     if(dayLoaded){if(typing())deferred=true;else renderJobs()}
   },e=>console.error(e));
 }
@@ -1001,6 +1001,75 @@ $('tSearch').addEventListener('input',renderTotem);
 $('tExit').onclick=closeTotem;
 if($('openTotem')){$('openTotem').hidden=!P.escala||!!(ctx&&ctx.totem);$('openTotem').onclick=openTotem}
 
+/* ---------- Central (tela do escritório: TV/tablet, só pra ver) ----------
+   Abre por #central (com login) ou #demo-central (dados de exemplo). Mostra sempre o dia de hoje, ao vivo. */
+let centralOn=false,cTimer=null,cUnsub=null,CNEXT={},cLock=null;
+const hm12=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
+async function keepAwake(){try{if(centralOn&&navigator.wakeLock&&document.visibilityState==='visible')cLock=await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('visibilitychange',keepAwake);
+function openCentral(){
+  centralOn=true;document.body.classList.add('totem-on');$('central').hidden=false;
+  if(cur!==todayISO())setDate(todayISO());
+  watchNext();renderCentral();keepAwake();
+  clearInterval(cTimer);cTimer=setInterval(()=>{if(cur!==todayISO()){setDate(todayISO());watchNext()}renderCentral()},20000);
+}
+function closeCentral(){
+  centralOn=false;clearInterval(cTimer);if(cUnsub){cUnsub();cUnsub=null}
+  try{cLock&&cLock.release()}catch(e){}cLock=null;
+  try{document.fullscreenElement&&document.exitFullscreen()}catch(e){}
+  document.body.classList.remove('totem-on');$('central').hidden=true;
+  if(/central/.test(location.hash))history.replaceState(null,'',location.pathname+location.search+(location.hash==='#demo-central'?'#demo':''));
+}
+function watchNext(){
+  if(cUnsub){cUnsub();cUnsub=null}
+  const a=new Date();a.setDate(a.getDate()+1);const b=new Date();b.setDate(b.getDate()+7);
+  cUnsub=db.collection('days').where('date','>=',iso(a)).where('date','<=',iso(b)).onSnapshot(s=>{CNEXT={};s.docs.forEach(d=>{const x=d.data();if(x&&x.date)CNEXT[x.date]=x});renderCentral()},e=>console.error(e));
+}
+function renderCentral(){
+  if(!centralOn)return;
+  $('cClock').textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase();
+  $('cDate').textContent=dateBR(todayISO());
+  if(!dayLoaded){$('cJobs').innerHTML='<p class="tempty">Carregando…</p>';return}
+  const jobs=D.jobs.filter(j=>j.company||j.crew.length);
+  let esc_=0,pres=0;const falt=[];
+  jobs.forEach(j=>{esc_+=j.crew.length;j.crew.forEach(c=>{const st=attOf(j,c.name);if(st==='in')pres++;else if(st==='out')falt.push({n:tidy(c.name),j})})});
+  const desp=jobs.filter(j=>j.left).length,tot=S.workers.length,livres=Math.max(0,tot-reserved(jobs));
+  const stat=(k,v,cls)=>`<div class="cstat${cls?' '+cls:''}"><b>${v}</b><span>${k}</span></div>`;
+  $('cStats').innerHTML=stat('Obras',jobs.length)+stat('Despachadas',desp+'<small>/'+jobs.length+'</small>',jobs.length&&desp===jobs.length?'ok':'')
+    +stat('Escalados',esc_)+stat('Presentes',pres,pres?'ok':'')+stat('Faltas',falt.length,falt.length?'bad':'')+stat('Livres',tot?livres:'—');
+  const order=j=>j.left?2:lateMin(j)?0:1;
+  const list=[...jobs].sort((a,b)=>order(a)-order(b)||String(a.shop||'').localeCompare(String(b.shop||'')));
+  const addr=j=>j.waiting||!j.address?'(Esperando endereço)':fmtAddress(j.address).split(',').slice(0,2).join(',');
+  $('cJobs').innerHTML=list.length?list.map(j=>{
+    const late=lateMin(j),st=j.left?'done':late?'late':'wait';
+    const badge=j.left?'DESPACHADA':late?lateText(j).replace('⏱ ','⏱ '):'AGUARDANDO';
+    const short=Math.max(0,(+j.need||0)-j.crew.length);
+    const crew=j.crew.map(c=>{const a=attOf(j,c.name),t=timeOf(j,c.name);const v=c.v?vLabel(c.v):'';
+      return `<li class="${a}"><i>${a==='in'?'✓':a==='out'?'✗':''}</i><span>${esc(tidy(c.name))}</span>${v?`<em>${esc(v)}</em>`:''}${t?`<small class="${isLate(j,c.name)?'late':''}">${esc(hm12(t))}</small>`:''}</li>`}).join('');
+    return `<article class="ctile ${st}"><header><b>${esc(tidy(j.company)||'Obra')}</b><span class="cbadge">${esc(badge)}</span></header>
+      <div class="caddr">${esc(addr(j))}</div>
+      <div class="ctimes">Shop <b>${esc(fmt(j.shop)||'—')}</b> · Start <b>${esc(fmt(j.start)||'—')}</b>${j.left?` · saiu <b>${esc(hm12(j.left))}</b>`:''}${j.allWeek?' · All Week':''}</div>
+      <ul class="ccrew">${crew||'<li class="none">Sem equipe ainda</li>'}</ul>${short?`<div class="cshort">${short>1?'Faltam '+short+' pessoas':'Falta 1 pessoa'}</div>`:''}</article>`}).join('')
+    :'<p class="tempty">Ainda não tem escala lançada pra hoje.</p>';
+  // avisos
+  const al=[];
+  list.filter(j=>lateMin(j)).forEach(j=>al.push(['bad',`<b>${esc(tidy(j.company)||'Obra')}</b> ainda no shop · ${esc(lateText(j).replace('⏱ ',''))}`]));
+  falt.forEach(f=>al.push(['bad',`<b>${esc(f.n)}</b> faltou · ${esc(tidy(f.j.company)||'')}`]));
+  jobs.forEach(j=>{const sh=Math.max(0,(+j.need||0)-j.crew.length);if(sh)al.push(['warn',`<b>${esc(tidy(j.company)||'Obra')}</b>: ${sh>1?'faltam '+sh+' pessoas':'falta 1 pessoa'}`])});
+  jobs.filter(j=>j.waiting||!j.address).forEach(j=>al.push(['warn',`<b>${esc(tidy(j.company)||'Obra')}</b>: esperando endereço`]));
+  const tm=new Date();tm.setDate(tm.getDate()+1);const tmj=((CNEXT[iso(tm)]||{}).jobs||[]);const semEq=tmj.filter(j=>!(j.crew||[]).length).length;
+  if(semEq)al.push(['info',`Amanhã: ${semEq} obra${semEq>1?'s':''} sem equipe ainda`]);
+  $('cAlerts').innerHTML=al.length?al.map(([c,h])=>`<div class="calert ${c}">${h}</div>`).join(''):'<div class="calert ok">Tudo certo por aqui ✓</div>';
+  // próximos dias
+  const days=[];for(let i=1;i<=7;i++){const d=new Date();d.setDate(d.getDate()+i);days.push(iso(d))}
+  $('cNext').innerHTML=days.map(ds=>{const js=((CNEXT[ds]||{}).jobs||[]).filter(j=>j.company||(j.crew||[]).length),r=reserved(js),lv=levelOf(r);
+    const [y,m,d]=ds.split('-'),wd=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][new Date(+y,m-1,+d).getDay()];
+    return `<div class="cday${js.length?'':' empty'}"><span class="cdw">${wd} ${d}/${m}</span><b>${js.length?js.length+' obra'+(js.length>1?'s':''):'—'}</b><span class="cdp">${js.length?`<i class="cdot ${lv}"></i>${r}${tot?' de '+tot:''} pessoas`:'livre'}</span></div>`}).join('');
+}
+$('cExit').onclick=closeCentral;
+$('cFull').onclick=()=>{try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(e){}};
+if($('openCentral')){$('openCentral').hidden=!!(ctx&&ctx.totem);$('openCentral').onclick=openCentral}
+
 /* ---------- Relatório do dia (pro patrão) ---------- */
 const hm=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
 function buildReport(){
@@ -1238,5 +1307,6 @@ if(P.telefones)db.doc(PHONES).onSnapshot(remotePhones,e=>{console.error(e)});els
 setStatus('ok');
 watchDay();
 if((ctx&&ctx.totem)||(location.hash==='#totem'&&P.escala))openTotem();
+else if(location.hash==='#central'||location.hash==='#demo-central')openCentral();
 return {flushAll};
 }

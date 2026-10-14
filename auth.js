@@ -143,7 +143,7 @@ async function route(u) {
   setupMembers(isAdmin, me);
 }
 /* ----- link de demonstração (#demo): dados inventados na memória, sem login, nada é salvo ----- */
-const DEMO = location.hash === '#demo';
+const DEMO = location.hash === '#demo' || location.hash === '#demo-central';
 if (DEMO) startDemo(); else onAuthStateChanged(auth, route);
 
 function memDb(seed) {
@@ -180,12 +180,15 @@ function demoSeed() {
   const A = 'Calca👖|Bota 🥾';
   const job = (id, company, address, shop, start, travel, crew, extra) => Object.assign({ id, company, address, waiting: false, office: false, attire: A, shop, start, early: 30, travel, autoShop: true, tk: '', need: crew.length, note: '', allWeek: false, crew: crew.map(c => Array.isArray(c) ? { name: c[0], v: c[1] } : { name: c, v: '' }) }, extra || {});
   const jobs = [
-    job('d1', 'ABC Restoration', '45 Elm Street, Framingham, MA', '06:15', '07:15', 30, [['Carlos Lima', '51'], 'João Pereira', 'Marcos Souza', 'Rafael Alves', 'Diego Santos'], { allWeek: true, note: 'Gate Code 1-2-3-4' }),
+    job('d1', 'ABC Restoration', '45 Elm Street, Framingham, MA', '06:15', '07:15', 30, [['Carlos Lima', '51'], 'João Pereira', 'Marcos Souza', 'Rafael Alves', 'Diego Santos'], { allWeek: true, note: 'Gate Code 1-2-3-4', left: new Date(today + 'T06:31:00').getTime() }),
     job('d2', 'Blue Line Builders', '210 Main Street, Worcester, MA', '06:00', '07:00', 30, [['André Costa', '52'], 'Felipe Rocha', 'Lucas Martins', ['Bruno Dias', 'own']], { need: 5 }),
     job('d3', 'Coastal Demo Co', '', '05:30', '07:30', null, [['Paulo Ribeiro', '54'], 'Thiago Gomes', 'Vitor Melo'], { waiting: true, autoShop: false, travel: null })
   ];
   const drivers = {}; jobs.forEach(j => { const n = j.crew.filter(c => c.v && c.v !== 'own').map(c => c.name); if (n.length) drivers[j.id] = n; });
   const t = h => new Date(today + 'T' + h + ':00').getTime();
+  const nextDays = () => { const o = {}; [[1, [['Blue Line Builders', 6], ['Harbor Homes', 4]]], [2, [['ABC Restoration', 5], ['Blue Line Builders', 8]]], [3, [['Coastal Demo Co', 12], ['Harbor Homes', 3]]], [6, [['ABC Restoration', 4]]]].forEach(([n, js]) => {
+    const d = new Date(); d.setDate(d.getDate() + n); const ds = iso(d);
+    o['days/' + ds] = { date: ds, sent: {}, drivers: {}, jobs: js.map(([c, need], i) => job('n' + n + i, c, '', '', '07:00', null, [], { need, autoShop: false, travel: null })) }; }); return o; };
   return {
     'config/roster': {
       workers: ['André Costa', 'Bruno Dias', 'Carlos Lima', 'Diego Santos', 'Eduardo Nunes', 'Felipe Rocha', 'Gabriel Teixeira', 'João Pereira', 'Lucas Martins', 'Marcos Souza', 'Paulo Ribeiro', 'Rafael Alves', 'Thiago Gomes', 'Vitor Melo'],
@@ -198,6 +201,7 @@ function demoSeed() {
     },
     'config/phones': { phones: { 'Carlos Lima': '(508) 555-0101', 'João Pereira': '(508) 555-0102', 'André Costa': '(508) 555-0103', 'Paulo Ribeiro': '(508) 555-0104' } },
     ['days/' + today]: { date: today, jobs, sent: {}, drivers },
+    ...nextDays(),
     ['days/' + yest]: { date: yest, jobs: [jobs[0]], sent: {}, drivers: { d1: ['Carlos Lima'] } },
     ['attendance/' + today + '_d1']: { date: today, jobId: 'd1', company: 'ABC Restoration', driver: 'Carlos Lima', by: 'demo', people: { 'Carlos Lima': 'in', 'João Pereira': 'in', 'Marcos Souza': 'in', 'Rafael Alves': 'out' }, times: { 'Carlos Lima': t('06:02'), 'João Pereira': t('06:09'), 'Marcos Souza': t('06:21') }, atMs: t('06:25') }
   };
