@@ -610,7 +610,7 @@ function renderRoster(){
     ${P.telefones?'':'<!--'}<input class="wphone${phoneOf(w)&&!waDigits(phoneOf(w))?' bad':''}" data-wp="${esc(w)}" value="${esc(phoneOf(w))}" placeholder="Telefone" inputmode="tel" aria-label="Telefone de ${esc(w)}" id="wp-${i}">${P.telefones?'':'-->'}
     <button class="x" data-wi="${i}" aria-label="Remover ${esc(w)}">×</button></div>`).join('')||'<span class="empty">Nenhum trabalhador cadastrado ainda.</span>';
   $('vehicles').innerHTML=S.vehicles.map((v,i)=>`<div class="lrow">
-    <select data-vi="${i}" data-k="t" aria-label="Tipo" id="vt-${i}"><option${v.t==='🛻'?' selected':''}>🛻</option><option${v.t==='🚐'?' selected':''}>🚐</option><option${v.t==='🚚'?' selected':''}>🚚</option></select>
+    <select data-vi="${i}" data-k="t" aria-label="Tipo" id="vt-${i}"><option${v.t==='🛻'?' selected':''}>🛻</option><option${v.t==='🚐'?' selected':''}>🚐</option><option${v.t==='🚚'?' selected':''}>🚚</option><option${v.t==='🚗'?' selected':''}>🚗</option></select>
     <input class="vnum" data-vi="${i}" data-k="n" value="${esc(v.n)}" inputmode="numeric" aria-label="Número" id="veh-${i}">
     <select class="grow vdsel" data-vi="${i}" data-k="d" aria-label="Motorista fixo do ${esc(v.n)}" id="vd-${i}"><option value="">Sem motorista fixo</option>${
       [...new Set([...S.workers,...(v.d?[v.d]:[])])].map(w=>`<option${v.d===w?' selected':''}>${esc(w)}</option>`).join('')}</select>
@@ -737,7 +737,7 @@ $('bkDays').onclick=async e=>{
 $('bkRoster').onclick=async e=>{
   const rows=[['Tipo','Nome / Número','Detalhe']];
   S.workers.forEach(w=>rows.push(['Trabalhador',w,phoneOf(w)]));
-  S.vehicles.forEach(v=>rows.push(['Veículo',v.n,v.t==='🚐'?'Van':v.t==='🚚'?'Caminhão':'Pickup']));
+  S.vehicles.forEach(v=>rows.push(['Veículo',v.n,v.t==='🚐'?'Van':v.t==='🚚'?'Caminhão':v.t==='🚗'?'Carro':'Pickup']));
   Object.keys(S.companies).sort().forEach(c=>{const l=S.companies[c].filter(Boolean);(l.length?l:['']).forEach(a=>rows.push(['Companhia',c,a]))});
   await offer('cadastro-backup-'+iso(new Date())+'.csv',toCSV(rows),e.currentTarget);
 };
