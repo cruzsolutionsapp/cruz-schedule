@@ -1011,7 +1011,8 @@ function openCentral(){
   centralOn=true;document.body.classList.add('totem-on');$('central').hidden=false;
   if(cur!==todayISO())setDate(todayISO());
   renderCentral();keepAwake();
-  clearInterval(cTimer);cTimer=setInterval(()=>{if(cur!==todayISO())setDate(todayISO());renderCentral()},20000);
+  const openedOn=todayISO();
+  clearInterval(cTimer);cTimer=setInterval(()=>{if(todayISO()!==openedOn&&!cUnlocked&&!cDetail&&$('cPin').hidden){location.reload();return}if(cur!==todayISO())setDate(todayISO());renderCentral()},20000);   // virou o dia: recarrega (pega a versão nova do app)
 }
 function closeCentral(){
   centralOn=false;clearInterval(cTimer);if(cUnsub){cUnsub();cUnsub=null}
