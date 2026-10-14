@@ -663,13 +663,18 @@ $('bkRoster').onclick=async e=>{
   await offer('cadastro-backup-'+iso(new Date())+'.csv',toCSV(rows),e.currentTarget);
 };
 showLastBackup();
-$('bkFull').onclick=async e=>{const btn=e.currentTarget;flushAll();let days;try{days=await allDays()}catch(err){toast('Não consegui ler as escalas');return}
-  await offer('cruz-schedule-backup-'+iso(new Date())+'.json',JSON.stringify({app:'cruz-schedule',version:1,exportedAt:new Date().toISOString(),roster:Object.assign({},S,P.telefones?{phones:PH}:{}),days},null,1),btn)};
+async function allAttendance(){const out=[];let after='';
+  for(;;){let q=db.collection('attendance');if(after)q=q.where('date','>',after);const s=await q.orderBy('date','asc').limit(500).get();
+    s.docs.forEach(d=>{const x=d.data();if(x){const {at,...r}=x;out.push(Object.assign({_id:d.id},r))}});if(s.size<500)break;after=s.docs[s.size-1].data().date}
+  return out}
+$('bkFull').onclick=async e=>{const btn=e.currentTarget;flushAll();let days,attendance=[];try{days=await allDays()}catch(err){toast('Não consegui ler as escalas');return}
+  try{attendance=await allAttendance()}catch(err){console.error(err)}
+  await offer('cruz-schedule-backup-'+iso(new Date())+'.json',JSON.stringify({app:'cruz-schedule',version:2,exportedAt:new Date().toISOString(),roster:Object.assign({},S,P.telefones?{phones:PH}:{}),days,attendance},null,1),btn)};
 let pendingImport=null;
 $('importFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
   try{const o=JSON.parse(await f.text());if(!o||o.app!=='cruz-schedule'||!o.roster||!Array.isArray(o.days))throw 0;
     pendingImport=o;const r=normRoster(o.roster);
-    $('importInfo').innerHTML=`Arquivo com <b>${r.workers.length}</b> trabalhadores, <b>${Object.keys(r.companies).length}</b> companhias e <b>${o.days.length}</b> dia(s) de escala. <button class="btn primary" id="importGo">Importar agora</button> <button class="linkbtn" id="importCancel">Cancelar</button><br><small>O cadastro atual será substituído pelo do arquivo. Dias com a mesma data também.</small>`;
+    $('importInfo').innerHTML=`Arquivo com <b>${r.workers.length}</b> trabalhadores, <b>${Object.keys(r.companies).length}</b> companhias, <b>${o.days.length}</b> dia(s) de escala e <b>${(o.attendance||[]).length}</b> registro(s) de presença. <button class="btn primary" id="importGo">Importar agora</button> <button class="linkbtn" id="importCancel">Cancelar</button><br><small>O cadastro atual será substituído pelo do arquivo. Dias com a mesma data também.</small>`;
     $('importInfo').hidden=false}
   catch(err){toast('Esse arquivo não é um backup do Cruz Schedule')}};
 $('importInfo').addEventListener('click',async e=>{
@@ -678,7 +683,8 @@ $('importInfo').addEventListener('click',async e=>{
   e.target.disabled=true;e.target.textContent='Importando…';
   try{S=normRoster(pendingImport.roster);lastSent[ROSTER]=stable(S);await db.doc(ROSTER).set(clone(S));
     if(P.telefones&&pendingImport.roster.phones){PH={...pendingImport.roster.phones};lastSent[PHONES]=stable({phones:PH});await db.doc(PHONES).set({phones:PH})}
-    for(const d of pendingImport.days){if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d.date))await db.doc(dayPath(d.date)).set({date:d.date,jobs:d.jobs||[],sent:d.sent||{}})}
+    for(const d of pendingImport.days){if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d.date))await db.doc(dayPath(d.date)).set({date:d.date,jobs:d.jobs||[],sent:d.sent||{},drivers:d.drivers||{}})}
+    for(const a of (pendingImport.attendance||[])){if(a&&a._id&&a.date&&a.jobId){const {_id,...r}=a;await db.doc('attendance/'+_id).set(r)}}
     toast('Importação concluída');pendingImport=null;$('importInfo').hidden=true;renderRoster();watchDay();
   }catch(err){console.error(err);toast('Falhou a importação: '+(err&&err.code||'erro'))}
 });
