@@ -1010,7 +1010,7 @@ document.addEventListener('visibilitychange',keepAwake);
 function openCentral(){
   centralOn=true;document.body.classList.add('totem-on');$('central').hidden=false;
   if(cur!==todayISO())setDate(todayISO());
-  renderCentral();keepAwake();
+  watchNextDays();renderCentral();keepAwake();
   const openedOn=todayISO();
   clearInterval(cTimer);cTimer=setInterval(()=>{if(todayISO()!==openedOn&&!cUnlocked&&!cDetail&&$('cPin').hidden){location.reload();return}if(cur!==todayISO())setDate(todayISO());renderCentral()},20000);   // virou o dia: recarrega (pega a versão nova do app)
 }
@@ -1021,8 +1021,13 @@ function closeCentral(){
   document.body.classList.remove('totem-on');$('central').hidden=true;
   if(/central/.test(location.hash))history.replaceState(null,'',location.pathname+location.search+(location.hash.startsWith('#demo-central')?'#demo':''));
 }
+function watchNextDays(){
+  if(cUnsub){cUnsub();cUnsub=null}
+  const a=new Date();a.setDate(a.getDate()+1);const b=new Date();b.setDate(b.getDate()+4);
+  cUnsub=db.collection('days').where('date','>=',iso(a)).where('date','<=',iso(b)).onSnapshot(s=>{CNEXT={};s.docs.forEach(d=>{const x=d.data();if(x&&x.date)CNEXT[x.date]=x});renderCentral()},e=>console.error(e));
+}
 /* Central: um PIN (guardado só neste aparelho) destrava despachar, presença e abrir o editor. Tranca sozinha após 1 min parado. */
-const cOpen=new Set();let cPage=0,cPages=1,cDetail=null;let cUnlocked=false,cIdle=null,pinBuf='',pinStage='enter',pinFirst='',cBackIdle=null;
+const cOpen=new Set();let cPage=0,cPages=1,cDetail=null,cKinds=[],CNEXT={};let cUnlocked=false,cIdle=null,pinBuf='',pinStage='enter',pinFirst='',cBackIdle=null;
 const PINKEY='centralPin'+(ctx&&ctx.email==='demo@exemplo'?'-demo':'');
 const getPin=()=>{try{return localStorage.getItem(PINKEY)||''}catch(e){return ''}};
 const setPin=v=>{try{v?localStorage.setItem(PINKEY,v):localStorage.removeItem(PINKEY)}catch(e){}};
@@ -1042,7 +1047,6 @@ function renderCentral(){
   const pill=(n,k,c)=>`<div class="cpill${c?' '+c:''}"><b>${n}</b><span>${k}</span></div>`;
   $('cStats').innerHTML=pill(jobs.length,jobs.length===1?'obra':'obras')+pill(desp+'/'+jobs.length,'despachadas',jobs.length&&desp===jobs.length?'ok':'')
     +((pres||falt)?pill(pres+'/'+esc_,'presentes','ok'):'')+pill(falt,falt===1?'falta':'faltas',falt?'bad':'');
-  if(!jobs.length){$('cBody').innerHTML='<p class="tempty">Ainda não tem escala lançada pra hoje.</p>';return}
   const name=j=>esc(tidy(j.company)||'Obra');
   const city=j=>{if(j.waiting||!j.address)return '(Esperando endereço)';const p=fmtAddress(j.address).split(',');return esc((p[1]||p[0]||'').trim())};
   const lateTxt=j=>{const m=lateMin(j);return m<60?m+' min':Math.floor(m/60)+'h'+String(m%60).padStart(2,'0')};
@@ -1069,26 +1073,46 @@ function renderCentral(){
       <div class="cdm">${when(j)} ${badge(j)} <span class="cc3">${people(j)} pessoas</span></div>${crewList(j)}${actions(j)}`}}
   else $('cDet').hidden=true;
   const body=$('cBody');
-  // 1) lista grande, se couber (ou se alguém abriu uma obra)
-  body.innerHTML='<div class="crows">'+list.map(j=>{const st=stOf(j),open=cOpen.has(j.id);
-    return `<div class="crow ${st}${open?' open':''}"><div class="crl" data-cj="${j.id}"><span class="cdot2"></span><div class="cn">${name(j)}<small>${subOf(j)}</small></div>
-      <div class="ct">${when(j)}</div>${badge(j)}<div class="cc">${people(j)}<small>pessoas</small></div></div>${open?crewList(j)+actions(j):''}</div>`}).join('')+'</div>'+hint;
-  if(cOpen.size||body.scrollHeight<=body.clientHeight+2){cPages=1;$('cDots').innerHTML='';return}
-  // 2) quadradinhos em colunas; 3) se ainda não couber, páginas que trocam sozinhas
-  cOpen.clear();
-  const w=body.clientWidth,cols=w>=1300?3:w>=720?2:1;
+  // próximo dia de trabalho (amanhã; se o fim de semana estiver vazio, pula pra segunda)
+  let nd=null;for(let i=1;i<=4&&!nd;i++){const d=new Date();d.setDate(d.getDate()+i);const ds=iso(d);const js=((CNEXT[ds]||{}).jobs||[]).filter(j=>j.company||(j.crew||[]).length);if(js.length)nd={ds,i,js}}
+  const showT=!!nd&&(new Date().getHours()>=12||!jobs.length||desp===jobs.length);
+  const w=body.clientWidth,cols=w>=1300?3:w>=720?2:1,gap=12;
   const tile=j=>{const st=stOf(j);return `<div class="ctile2 ${st}" data-cd="${j.id}"><div class="t2h"><span class="cdot2"></span><b>${name(j)}</b><span class="t2p">${people(j)} 👷</span></div>
     <div class="t2s">${badge(j)}<span class="t2w">${when(j)}</span></div><div class="t2m">${subOf(j)||'&nbsp;'}</div></div>`};
-  body.innerHTML=`<div class="cgrid" style="--cols:${cols}">${list.map(tile).join('')}</div>`;
-  const first=body.querySelector('.ctile2'),gap=12;
-  const rows=Math.max(1,Math.floor((body.clientHeight+gap)/(first.offsetHeight+gap)));
-  const per=cols*rows;cPages=Math.max(1,Math.ceil(list.length/per));if(cPage>=cPages)cPage=0;
-  if(cPages===1){$('cDots').innerHTML='';return}
-  let h='';for(let p=0;p<cPages;p++)h+=`<div class="cgrid" data-page="${p}" style="--cols:${cols}"${p===cPage?'':' hidden'}>${list.slice(p*per,(p+1)*per).map(tile).join('')}</div>`;
-  body.innerHTML=h;cDotsDraw();
+  const grid=arr=>`<div class="cgrid" style="--cols:${cols}">${arr.join('')}</div>`;
+  const pages=[];let th=0;
+  const measure=html=>{body.innerHTML=html;const t=body.querySelector('.ctile2');return t?t.offsetHeight:0};
+  if(list.length){
+    body.innerHTML='<div class="crows">'+list.map(j=>{const st=stOf(j),open=cOpen.has(j.id);
+      return `<div class="crow ${st}${open?' open':''}"><div class="crl" data-cj="${j.id}"><span class="cdot2"></span><div class="cn">${name(j)}<small>${subOf(j)}</small></div>
+        <div class="ct">${when(j)}</div>${badge(j)}<div class="cc">${people(j)}<small>pessoas</small></div></div>${open?crewList(j)+actions(j):''}</div>`}).join('')+'</div>'+hint;
+    if(cOpen.size||body.scrollHeight<=body.clientHeight+2)pages.push({html:body.innerHTML});
+    else{cOpen.clear();th=measure(grid([tile(list[0])]));
+      const per=cols*Math.max(1,Math.floor((body.clientHeight+gap)/(th+gap)));
+      for(let i=0;i<list.length;i+=per)pages.push({html:grid(list.slice(i,i+per).map(tile))})}
+  }
+  if(showT){
+    const [y,m,d]=nd.ds.split('-');const wd=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][new Date(+y,m-1,+d).getDay()];
+    const tj=[...nd.js].sort((a,b)=>String(a.shop||a.start||'').localeCompare(String(b.shop||b.start||'')));
+    const tot=tj.reduce((n,j)=>n+Math.max(+j.need||0,(j.crew||[]).length),0);
+    const banner=`<div class="ctmr"><b>${nd.i===1?'AMANHÃ':'PRÓXIMO DIA'} →</b><span class="ctd">${wd}, ${d}/${m}</span><span class="ctn">${tj.length} obra${tj.length>1?'s':''} · ${tot} pessoa${tot===1?'':'s'}</span></div>`;
+    const tTile=j=>{const n=(j.crew||[]).length,need=+j.need||0;const warn=!n?'sem equipe ainda':need>n?(need-n>1?'faltam '+(need-n)+' pessoas':'falta 1 pessoa'):'';
+      const c=j.waiting||!j.address?'(Esperando endereço)':esc((fmtAddress(j.address).split(',')[1]||fmtAddress(j.address).split(',')[0]||'').trim());
+      return `<div class="ctile2 tmr"><div class="t2h"><b>${esc(tidy(j.company)||'Obra')}</b><span class="t2p">${need>n?n+'/'+need:n} 👷</span></div>
+        <div class="t2s"><span class="t2w">${j.shop?'shop <b>'+esc(fmt(j.shop))+'</b> · ':''}start <b>${esc(fmt(j.start)||'—')}</b></span></div>
+        <div class="t2m">${c}${warn?` · <span class="t2warn">${warn}</span>`:''}</div></div>`};
+    body.innerHTML=banner+grid([tTile(tj[0])]);
+    const bh=body.querySelector('.ctmr').offsetHeight+gap,tth=body.querySelector('.ctile2').offsetHeight;
+    const per=cols*Math.max(1,Math.floor((body.clientHeight-bh+gap)/(tth+gap)));
+    for(let i=0;i<tj.length;i+=per)pages.push({html:banner+grid(tj.slice(i,i+per).map(tTile)),t:true});
+  }
+  if(!pages.length){body.innerHTML='<p class="tempty">Ainda não tem escala lançada pra hoje.</p>';cPages=1;cKinds=[];$('cDots').innerHTML='';return}
+  cPages=pages.length;if(cPage>=cPages)cPage=0;cKinds=pages.map(p=>!!p.t);
+  body.innerHTML=pages.map((p,i)=>`<div class="cpage" data-page="${i}"${i===cPage?'':' hidden'}>${p.html}</div>`).join('');
+  cDotsDraw();
 }
-function cDotsDraw(){$('cDots').innerHTML=cPages>1?Array.from({length:cPages},(_,i)=>`<i class="${i===cPage?'on':''}"></i>`).join('')+`<span>página ${cPage+1} de ${cPages}</span>`:''}
-function cNextPage(){if(!centralOn||cPages<2||cDetail||!$('cPin').hidden)return;cPage=(cPage+1)%cPages;
+function cDotsDraw(){$('cDots').innerHTML=cPages>1?Array.from({length:cPages},(_,i)=>`<i class="${i===cPage?'on':''}${cKinds[i]?' t':''}"></i>`).join('')+`<span>${cKinds[cPage]?'próximo dia':'hoje'} · página ${cPage+1} de ${cPages}</span>`:''}
+function cNextPage(){if(!centralOn||cPages<2||cDetail||cOpen.size||!$('cPin').hidden)return;cPage=(cPage+1)%cPages;
   document.querySelectorAll('#cBody [data-page]').forEach(g=>g.hidden=+g.dataset.page!==cPage);cDotsDraw()}
 setInterval(cNextPage,10000);
 window.addEventListener('resize',()=>{if(centralOn)renderCentral()});
