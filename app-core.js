@@ -1003,15 +1003,15 @@ if($('openTotem')){$('openTotem').hidden=!P.escala||!!(ctx&&ctx.totem);$('openTo
 
 /* ---------- Central (tela do escritório: TV/tablet, só pra ver) ----------
    Abre por #central (com login) ou #demo-central (dados de exemplo). Mostra sempre o dia de hoje, ao vivo. */
-let centralOn=false,cTimer=null,cUnsub=null,CNEXT={},cLock=null;
+let centralOn=false,cTimer=null,cUnsub=null,cLock=null;
 const hm12=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
 async function keepAwake(){try{if(centralOn&&navigator.wakeLock&&document.visibilityState==='visible')cLock=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',keepAwake);
 function openCentral(){
   centralOn=true;document.body.classList.add('totem-on');$('central').hidden=false;
   if(cur!==todayISO())setDate(todayISO());
-  watchNext();renderCentral();keepAwake();
-  clearInterval(cTimer);cTimer=setInterval(()=>{if(cur!==todayISO()){setDate(todayISO());watchNext()}renderCentral()},20000);
+  renderCentral();keepAwake();
+  clearInterval(cTimer);cTimer=setInterval(()=>{if(cur!==todayISO())setDate(todayISO());renderCentral()},20000);
 }
 function closeCentral(){
   centralOn=false;clearInterval(cTimer);if(cUnsub){cUnsub();cUnsub=null}
@@ -1020,52 +1020,61 @@ function closeCentral(){
   document.body.classList.remove('totem-on');$('central').hidden=true;
   if(/central/.test(location.hash))history.replaceState(null,'',location.pathname+location.search+(location.hash==='#demo-central'?'#demo':''));
 }
-function watchNext(){
-  if(cUnsub){cUnsub();cUnsub=null}
-  const a=new Date();a.setDate(a.getDate()+1);const b=new Date();b.setDate(b.getDate()+7);
-  cUnsub=db.collection('days').where('date','>=',iso(a)).where('date','<=',iso(b)).onSnapshot(s=>{CNEXT={};s.docs.forEach(d=>{const x=d.data();if(x&&x.date)CNEXT[x.date]=x});renderCentral()},e=>console.error(e));
-}
+let cLayout=(()=>{try{return localStorage.getItem('centralLayout')||'A'}catch(e){return 'A'}})(),cOpen=new Set();
 function renderCentral(){
   if(!centralOn)return;
   $('cClock').textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase();
-  $('cDate').textContent=dateBR(todayISO());
-  if(!dayLoaded){$('cJobs').innerHTML='<p class="tempty">Carregando…</p>';return}
+  const [yy,mm,dd]=todayISO().split('-');
+  $('cDate').textContent=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][new Date(+yy,mm-1,+dd).getDay()]+', '+dd+'/'+mm;
+  document.querySelectorAll('#cSwitch [data-lay]').forEach(b=>b.classList.toggle('on',b.dataset.lay===cLayout));
+  if(!dayLoaded){$('cBody').innerHTML='<p class="tempty">Carregando…</p>';$('cStats').innerHTML='';return}
   const jobs=D.jobs.filter(j=>j.company||j.crew.length);
-  let esc_=0,pres=0;const falt=[];
-  jobs.forEach(j=>{esc_+=j.crew.length;j.crew.forEach(c=>{const st=attOf(j,c.name);if(st==='in')pres++;else if(st==='out')falt.push({n:tidy(c.name),j})})});
-  const desp=jobs.filter(j=>j.left).length,tot=S.workers.length,livres=Math.max(0,tot-reserved(jobs));
-  const stat=(k,v,cls)=>`<div class="cstat${cls?' '+cls:''}"><b>${v}</b><span>${k}</span></div>`;
-  $('cStats').innerHTML=stat('Obras',jobs.length)+stat('Despachadas',desp+'<small>/'+jobs.length+'</small>',jobs.length&&desp===jobs.length?'ok':'')
-    +stat('Escalados',esc_)+stat('Presentes',pres,pres?'ok':'')+stat('Faltas',falt.length,falt.length?'bad':'')+stat('Livres',tot?livres:'—');
+  let esc_=0,pres=0,falt=0;
+  jobs.forEach(j=>{esc_+=j.crew.length;j.crew.forEach(c=>{const st=attOf(j,c.name);if(st==='in')pres++;else if(st==='out')falt++})});
+  const desp=jobs.filter(j=>j.left).length;
+  const pill=(n,k,c)=>`<div class="cpill${c?' '+c:''}"><b>${n}</b><span>${k}</span></div>`;
+  let pills=pill(jobs.length,jobs.length===1?'obra':'obras');
+  if(cLayout!=='B')pills+=pill(desp+'/'+jobs.length,'despachadas',jobs.length&&desp===jobs.length?'ok':'');
+  if(cLayout!=='C'&&(pres||falt))pills+=pill(pres+'/'+esc_,'presentes','ok');
+  pills+=pill(falt,falt===1?'falta':'faltas',falt?'bad':'');
+  $('cStats').innerHTML=pills;
+  if(!jobs.length){$('cBody').innerHTML='<p class="tempty">Ainda não tem escala lançada pra hoje.</p>';return}
+  const name=j=>esc(tidy(j.company)||'Obra');
+  const city=j=>j.waiting||!j.address?'(Esperando endereço)':esc((fmtAddress(j.address).split(',')[1]||fmtAddress(j.address).split(',')[0]||'').trim());
+  const lateTxt=j=>{const m=lateMin(j);return m<60?m+' min':Math.floor(m/60)+'h'+String(m%60).padStart(2,'0')};
+  const stOf=j=>j.left?'done':lateMin(j)?'late':'wait';
+  const short=j=>Math.max(0,(+j.need||0)-j.crew.length);
+  const shortTxt=j=>{const n=short(j);return n?(n>1?'faltam '+n+' pessoas':'falta 1 pessoa'):''};
+  const marked=j=>j.crew.filter(c=>attOf(j,c.name)==='in').length;
+  const people=j=>{const m=marked(j);return j.left&&m?m+'/'+j.crew.length:String(j.crew.length)};
+  const crewList=j=>j.crew.length?`<ul class="ccrew">${j.crew.map(c=>{const a=attOf(j,c.name),v=c.v?vLabel(c.v):'';
+    return `<li class="${a}"><i>${a==='in'?'✓':a==='out'?'✗':'·'}</i><span>${esc(tidy(c.name))}</span>${v?`<em>${esc(v)}</em>`:''}</li>`}).join('')}</ul>`:'<p class="cnone">Sem equipe ainda</p>';
+  const absent=j=>j.crew.filter(c=>attOf(j,c.name)==='out').map(c=>esc(tidy(c.name)));
   const order=j=>j.left?2:lateMin(j)?0:1;
   const list=[...jobs].sort((a,b)=>order(a)-order(b)||String(a.shop||'').localeCompare(String(b.shop||'')));
-  const addr=j=>j.waiting||!j.address?'(Esperando endereço)':fmtAddress(j.address).split(',').slice(0,2).join(',');
-  $('cJobs').innerHTML=list.length?list.map(j=>{
-    const late=lateMin(j),st=j.left?'done':late?'late':'wait';
-    const badge=j.left?'DESPACHADA':late?lateText(j).replace('⏱ ','⏱ '):'AGUARDANDO';
-    const short=Math.max(0,(+j.need||0)-j.crew.length);
-    const crew=j.crew.map(c=>{const a=attOf(j,c.name),t=timeOf(j,c.name);const v=c.v?vLabel(c.v):'';
-      return `<li class="${a}"><i>${a==='in'?'✓':a==='out'?'✗':''}</i><span>${esc(tidy(c.name))}</span>${v?`<em>${esc(v)}</em>`:''}${t?`<small class="${isLate(j,c.name)?'late':''}">${esc(hm12(t))}</small>`:''}</li>`}).join('');
-    return `<article class="ctile ${st}"><header><b>${esc(tidy(j.company)||'Obra')}</b><span class="cbadge">${esc(badge)}</span></header>
-      <div class="caddr">${esc(addr(j))}</div>
-      <div class="ctimes">Shop <b>${esc(fmt(j.shop)||'—')}</b> · Start <b>${esc(fmt(j.start)||'—')}</b>${j.left?` · saiu <b>${esc(hm12(j.left))}</b>`:''}${j.allWeek?' · All Week':''}</div>
-      <ul class="ccrew">${crew||'<li class="none">Sem equipe ainda</li>'}</ul>${short?`<div class="cshort">${short>1?'Faltam '+short+' pessoas':'Falta 1 pessoa'}</div>`:''}</article>`}).join('')
-    :'<p class="tempty">Ainda não tem escala lançada pra hoje.</p>';
-  // avisos
-  const al=[];
-  list.filter(j=>lateMin(j)).forEach(j=>al.push(['bad',`<b>${esc(tidy(j.company)||'Obra')}</b> ainda no shop · ${esc(lateText(j).replace('⏱ ',''))}`]));
-  falt.forEach(f=>al.push(['bad',`<b>${esc(f.n)}</b> faltou · ${esc(tidy(f.j.company)||'')}`]));
-  jobs.forEach(j=>{const sh=Math.max(0,(+j.need||0)-j.crew.length);if(sh)al.push(['warn',`<b>${esc(tidy(j.company)||'Obra')}</b>: ${sh>1?'faltam '+sh+' pessoas':'falta 1 pessoa'}`])});
-  jobs.filter(j=>j.waiting||!j.address).forEach(j=>al.push(['warn',`<b>${esc(tidy(j.company)||'Obra')}</b>: esperando endereço`]));
-  const tm=new Date();tm.setDate(tm.getDate()+1);const tmj=((CNEXT[iso(tm)]||{}).jobs||[]);const semEq=tmj.filter(j=>!(j.crew||[]).length).length;
-  if(semEq)al.push(['info',`Amanhã: ${semEq} obra${semEq>1?'s':''} sem equipe ainda`]);
-  $('cAlerts').innerHTML=al.length?al.map(([c,h])=>`<div class="calert ${c}">${h}</div>`).join(''):'<div class="calert ok">Tudo certo por aqui ✓</div>';
-  // próximos dias
-  const days=[];for(let i=1;i<=7;i++){const d=new Date();d.setDate(d.getDate()+i);days.push(iso(d))}
-  $('cNext').innerHTML=days.map(ds=>{const js=((CNEXT[ds]||{}).jobs||[]).filter(j=>j.company||(j.crew||[]).length),r=reserved(js),lv=levelOf(r);
-    const [y,m,d]=ds.split('-'),wd=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][new Date(+y,m-1,+d).getDay()];
-    return `<div class="cday${js.length?'':' empty'}"><span class="cdw">${wd} ${d}/${m}</span><b>${js.length?js.length+' obra'+(js.length>1?'s':''):'—'}</b><span class="cdp">${js.length?`<i class="cdot ${lv}"></i>${r}${tot?' de '+tot:''} pessoas`:'livre'}</span></div>`}).join('');
+  let h='';
+  if(cLayout==='A'){
+    h='<div class="crows">'+list.map(j=>{const st=stOf(j),open=cOpen.has(j.id),sub=[city(j),shortTxt(j)].filter(Boolean).join(' · ');
+      return `<div class="crow ${st}${open?' open':''}" data-cj="${j.id}"><div class="crl"><span class="cdot2"></span><div class="cn">${name(j)}<small>${sub}</small></div>
+        <div class="ct">${j.left?'saiu <b>'+esc(hm12(j.left))+'</b>':'shop <b>'+esc(fmt(j.shop)||'—')+'</b>'}</div>
+        <span class="cst ${st}">${st==='done'?'DESPACHADA':st==='late'?'⏱ '+lateTxt(j)+' atrasada':'AGUARDANDO'}</span>
+        <div class="cc">${people(j)}<small>pessoas</small></div></div>${open?crewList(j):''}</div>`}).join('')+'</div><p class="chint">Toque numa obra pra ver a equipe</p>';
+  }else if(cLayout==='B'){
+    const col=(st,t)=>{const js=list.filter(j=>stOf(j)===st);
+      return `<div class="ccol ${st}"><h3>${t} <i>${js.length}</i></h3>${js.length?js.map(j=>{const ab=absent(j);
+        return `<div class="ck"><b>${name(j)}</b><p>${st==='done'?'saiu <strong>'+esc(hm12(j.left))+'</strong> · '+(marked(j)?marked(j)+' de '+j.crew.length+' vieram':j.crew.length+' pessoas')
+          :'shop '+esc(fmt(j.shop)||'—')+' · <strong>'+j.crew.length+' pessoa'+(j.crew.length===1?'':'s')+'</strong>'+(short(j)?' · '+shortTxt(j):'')}</p>
+          ${st==='late'?`<div class="cbig">⏱ ${lateTxt(j)}</div>`:''}${ab.length?`<p class="cab">❌ ${ab.join(', ')} faltou</p>`:''}</div>`}).join(''):'<p class="cempty">Nenhuma</p>'}</div>`};
+    h='<div class="ccols">'+col('late','Atrasadas')+col('wait','Aguardando')+col('done','Despachadas')+'</div>';
+  }else{
+    h='<div class="ccards">'+list.map(j=>{const st=stOf(j);
+      return `<div class="ccard ${st}"><div class="cch"><b>${name(j)}</b><span>${st==='done'?'DESPACHADA':st==='late'?'⏱ '+lateTxt(j):'AGUARDANDO'}</span></div>
+        <div class="ccb"><div class="ctm">${j.left?'saiu <b>'+esc(hm12(j.left))+'</b>':'shop <b>'+esc(fmt(j.shop)||'—')+'</b> · start '+esc(fmt(j.start)||'—')}${short(j)?' · <span class="cshortc">'+shortTxt(j)+'</span>':''}</div>${crewList(j)}</div></div>`}).join('')+'</div>';
+  }
+  $('cBody').innerHTML=h;
 }
+$('cBody').addEventListener('click',e=>{const r=e.target.closest('[data-cj]');if(!r)return;const id=r.dataset.cj;cOpen.has(id)?cOpen.delete(id):cOpen.add(id);renderCentral()});
+$('cSwitch').addEventListener('click',e=>{const b=e.target.closest('[data-lay]');if(!b)return;cLayout=b.dataset.lay;try{localStorage.setItem('centralLayout',cLayout)}catch(err){}renderCentral()});
 $('cExit').onclick=closeCentral;
 $('cFull').onclick=()=>{try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(e){}};
 if($('openCentral')){$('openCentral').hidden=!!(ctx&&ctx.totem);$('openCentral').onclick=openCentral}

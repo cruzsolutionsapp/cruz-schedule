@@ -271,15 +271,14 @@
 <div class="central" id="central" hidden>
   <div class="ctop">
     <div class="logo tlogo" role="img" aria-label="Cruz Solutions"></div>
-    <div class="tclock"><b id="cClock"></b><span id="cDate"></span></div>
-    <div class="cbtns"><button class="btn texit" id="cFull">⛶ Tela cheia</button><button class="btn texit" id="cExit">Sair da Central</button></div>
+    <div class="cclock"><b id="cClock"></b><span id="cDate"></span></div>
+    <div class="cbtns">
+      <div class="cswitch" id="cSwitch" title="Jeito de mostrar"><button data-lay="A">A</button><button data-lay="B">B</button><button data-lay="C">C</button></div>
+      <button class="btn texit" id="cFull">⛶ Tela cheia</button><button class="btn texit" id="cExit">Sair</button>
+    </div>
   </div>
-  <div class="cstats" id="cStats"></div>
-  <div class="cmain">
-    <div class="cjobs" id="cJobs"></div>
-    <aside class="caside"><h3>Avisos</h3><div id="cAlerts"></div></aside>
-  </div>
-  <div class="cnextwrap"><h3>Próximos dias</h3><div class="cnext" id="cNext"></div></div>
+  <div class="cpills" id="cStats"></div>
+  <div class="cbody" id="cBody"></div>
 </div>
 <div class="modal" id="calDay" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cdTitle">
