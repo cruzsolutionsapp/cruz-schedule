@@ -984,7 +984,7 @@ function renderCal(){
     html+=`<button class="calday${d.getMonth()!==calMonth.getMonth()?' out':''}${ds===today?' today':''}${ds===cur?' cur':''}" data-cal="${ds}" aria-label="${esc(dateBR(ds))}">
       <span class="cdnum">${d.getDate()}</span>
       ${jobs.slice(0,3).map(j=>`<span class="cdjob">${esc(j.company||'Obra')}</span>`).join('')}${jobs.length>3?`<span class="cdmore">+${jobs.length-3}</span>`:''}
-      ${n?`<span class="cdcount ${lv}">👷 ${n}${tot?' de '+tot:''}</span>`:''}</button>`}
+      ${tot?`<span class="cdfree ${lv||'ok'}" title="${n} reservados de ${tot}">${tot-n>=0?`<b>${tot-n}</b><em> livres</em>`:`<b>−${n-tot}</b><em> faltam</em>`}</span>`:''}</button>`}
   $('calGrid').innerHTML=html;
 }
 function openCalDay(ds){calSel=ds;$('calDay').hidden=false;document.body.classList.add('modal-open');

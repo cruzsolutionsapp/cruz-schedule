@@ -415,3 +415,11 @@ body.viewer{padding-bottom:24px}
 .cdform{display:flex;flex-direction:column;gap:10px;border-top:1px dashed var(--line);padding-top:12px}
 .cdform h3{font-size:16px;letter-spacing:.04em;text-transform:uppercase}
 .cdchecks{display:flex;flex-direction:column;gap:6px;justify-content:flex-end}
+
+/* número de livres em cada dia do calendário */
+.cdfree{margin-top:auto;align-self:stretch;display:flex;align-items:baseline;justify-content:center;gap:2px;border-radius:6px;padding:2px 4px;font-variant-numeric:tabular-nums}
+.cdfree b{font-family:var(--f-display);font-size:22px;line-height:1}
+.cdfree em{font-style:normal;font-size:11px;font-weight:600}
+.cdfree.ok{background:var(--ok-soft);color:var(--ok)}.cdfree.warn{background:var(--warn-soft);color:var(--warn)}.cdfree.bad{background:var(--bad-soft);color:var(--bad)}
+.calday.out .cdfree{background:none}
+@media (max-width:620px){.cdfree em{display:none}.cdfree b{font-size:18px}}
