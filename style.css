@@ -423,3 +423,11 @@ body.viewer{padding-bottom:24px}
 .cdfree.ok{background:var(--ok-soft);color:var(--ok)}.cdfree.warn{background:var(--warn-soft);color:var(--warn)}.cdfree.bad{background:var(--bad-soft);color:var(--bad)}
 .calday.out .cdfree{background:none}
 @media (max-width:620px){.cdfree em{display:none}.cdfree b{font-size:18px}}
+
+/* calendário limpo: bolinha de cor no dia + info no topo ao passar o mouse */
+.cdtop{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.cddot{width:9px;height:9px;border-radius:50%;flex:none}
+.cddot.ok{background:var(--ok)}.cddot.warn{background:var(--warn)}.cddot.bad{background:var(--bad)}
+.callegend.info{border-radius:999px;padding:3px 10px;font-size:13px}
+.callegend.info.ok{background:var(--ok-soft);color:var(--ok)}.callegend.info.warn{background:var(--warn-soft);color:var(--warn)}.callegend.info.bad{background:var(--bad-soft);color:var(--bad)}
+.cdfree{display:none}

@@ -982,10 +982,11 @@ function renderCal(){
   let html=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d=>`<div class="calwd">${d}</div>`).join('');
   for(let i=0;i<42;i++){const d=new Date(f);d.setDate(f.getDate()+i);const ds=iso(d);const jobs=dayJobs(ds);const n=reserved(jobs);const lv=levelOf(n);
     html+=`<button class="calday${d.getMonth()!==calMonth.getMonth()?' out':''}${ds===today?' today':''}${ds===cur?' cur':''}" data-cal="${ds}" aria-label="${esc(dateBR(ds))}">
-      <span class="cdnum">${d.getDate()}</span>
+      <span class="cdtop"><span class="cdnum">${d.getDate()}</span>${n?`<i class="cddot ${lv}"></i>`:''}</span>
       ${jobs.slice(0,3).map(j=>`<span class="cdjob">${esc(j.company||'Obra')}</span>`).join('')}${jobs.length>3?`<span class="cdmore">+${jobs.length-3}</span>`:''}
-      ${tot?`<span class="cdfree ${lv||'ok'}" title="${n} reservados de ${tot}">${tot-n>=0?`<b>${tot-n}</b><em> livres</em>`:`<b>−${n-tot}</b><em> faltam</em>`}</span>`:''}</button>`}
+      </button>`}
   $('calGrid').innerHTML=html;
+  if($('calInfo')&&!$('calInfo').classList.contains('info'))calInfo(null);
 }
 function openCalDay(ds){calSel=ds;$('calDay').hidden=false;document.body.classList.add('modal-open');
   $('cdForm').reset();$('cdStart').value='07:00';$('cdSkipWknd').checked=true;$('cdAllWeek').checked=false;$('cdWarn').hidden=true;
@@ -1043,6 +1044,14 @@ $('cdForm').addEventListener('submit',async e=>{e.preventDefault();if(!P.escala)
 ['cdNeed','cdUntil','cdSkipWknd'].forEach(id=>$(id).addEventListener('input',cdCheck));
 $('cdAllWeek').addEventListener('change',e=>{e.target.dataset.touched='1'});
 $('cdCo').addEventListener('change',()=>{const list=coAddrs($('cdCo').value);$('cdAddrList').innerHTML=list.map(a=>`<option value="${esc(a)}">`).join('');if(list.length===1&&!$('cdAddr').value)$('cdAddr').value=list[0]});
+// passar o mouse no dia: mostra pessoas lá em cima, no lugar da legenda
+const LEGEND=()=>`<i class="cl ok"></i>folga <i class="cl warn"></i>quase no limite <i class="cl bad"></i>faltam <span class="hint">· passe o mouse num dia</span>`;
+function calInfo(ds){const el=$('calInfo');if(!ds){el.innerHTML=LEGEND();el.className='callegend';return}
+  const n=reserved(dayJobs(ds)),tot=S.workers.length,free=tot-n,lv=levelOf(n)||'ok';
+  el.className='callegend info '+lv;
+  el.innerHTML=`<b>${esc(dateBR(ds))}</b> · ${tot} funcionários · ${n} reservado${n===1?'':'s'} · <b>${free>=0?free+' livre'+(free===1?'':'s'):'faltam '+(-free)}</b>`}
+$('calGrid').addEventListener('mouseover',e=>{const b=e.target.closest('[data-cal]');calInfo(b&&b.dataset.cal)});
+$('calGrid').addEventListener('mouseleave',()=>calInfo(null));
 $('calGrid').addEventListener('click',e=>{const b=e.target.closest('[data-cal]');if(b)openCalDay(b.dataset.cal)});
 $('calDay').addEventListener('click',e=>{if(e.target.id==='calDay')closeCalDay();if(e.target.id==='cdOpen'){const ds=calSel;closeCalDay();setDate(ds);tab('day')}});
 $('cdClose').onclick=closeCalDay;

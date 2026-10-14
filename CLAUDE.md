@@ -21,7 +21,7 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - Modo Totem (tablet no shop): tela separada `#totem` (abre pelo botão em Cadastro → Acesso, pelo link `#totem`, ou sozinho no login com perm `totem`). Toca no nome → grava people='in' + times. Escritório vê a hora ao lado do nome; atrasado = depois do horário do shop. Perm `totem` é false por padrão.
 - Link de demonstração: `…/cruz-schedule/#demo` abre sem login, com dados inventados num banco em memória (`memDb`/`demoSeed` em auth.js). Nada é salvo nem lê dados reais.
 - Aba 🔍 Buscar: busca em `days` (e presença em `attendance`) por funcionário, companhia ou endereço, com período (7/30/90/365 dias ou datas). Sem acento/maiúscula. Clicar no resultado abre o dia e destaca a obra. Baixa .csv (perm backup).
-- Aba 📅 Calendário: mês com as obras de cada dia (lê `days` do intervalo, ao vivo). "+ Agendamento" grava a obra direto em `days/AAAA-MM-DD` (equipe vazia, `need` = quantas pessoas; repetir até X pulando fim de semana; All Week). Cada dia mostra o nº de LIVRES = total de `workers` − soma de max(need, equipe) (verde/laranja ≥85%/vermelho acima).
+- Aba 📅 Calendário: mês com as obras de cada dia (lê `days` do intervalo, ao vivo). "+ Agendamento" grava a obra direto em `days/AAAA-MM-DD` (equipe vazia, `need` = quantas pessoas; repetir até X pulando fim de semana; All Week). Livres = total de `workers` − soma de max(need, equipe). No dia só aparece uma bolinha de cor (verde/laranja ≥85%/vermelho acima); os números aparecem no topo (#calInfo) ao passar o mouse, e no painel do dia ao tocar.
 
 ## Formato da mensagem do WhatsApp (não mudar sem pedir)
 ```
