@@ -413,7 +413,7 @@ function refresh(save=true){
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
   if(viewer)$('msgTitle').innerHTML='Escala <small>'+esc(dateBR())+'</small>';
   const a=assignedSet();const free=S.workers.filter(w=>!a.has(w.toLowerCase())&&!isOff(w));const offs=Object.keys(OFF);
-  $('free').innerHTML=(free.map(w=>`<span class="chip">${esc(w)}</span>`).join('')||'<span class="empty">Todos os fixos estão escalados.</span>')+(offs.length?`<div class="offrow">${offs.map(w=>`<span class="chip off" title="Day off">❌ ${esc(w)}</span>`).join('')}</div>`:'');
+  $('free').innerHTML=(free.map(w=>`<span class="chip">${esc(w)}</span>`).join('')||'<span class="empty">Todos os fixos estão escalados.</span>')+offs.map(w=>`<span class="chip" title="Day off">❌ ${esc(w)}</span>`).join('');
   $('freeCount').textContent=free.length+' de '+S.workers.length;
   if(!(document.activeElement&&document.activeElement.classList.contains('ntphone')))renderNotify();
   renderPhotos();
