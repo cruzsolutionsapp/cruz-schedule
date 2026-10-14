@@ -1238,6 +1238,11 @@ function buildReport(){
   if(pres+falt.length)L.push(`✅ Presentes: ${pres} · ❌ Faltas: ${falt.length}`);
   else L.push('📋 Presença: não marcada');
   if(falt.length)L.push('','❌ *Faltaram*',...falt.map(x=>'• '+x));
+  {const asg=new Set();jobs.forEach(j=>j.crew.forEach(c=>asg.add(nkey(c.name))));
+    const offs=Object.keys(OFF).map(tidy).filter(Boolean),fora=S.workers.filter(w=>!asg.has(nkey(w))&&!isOff(w)).map(tidy);
+    if(fora.length||offs.length){L.push('');
+      if(fora.length)L.push(`👷 *Fora do schedule* (${fora.length})`,fora.join(', '));
+      if(offs.length)L.push(`🌴 *Day off*: ${offs.join(', ')}`)}}
   L.push('','🚚 *Saídas*');
   jobs.forEach(j=>{let t;
     if(j.left)t='saiu '+hm(j.left);

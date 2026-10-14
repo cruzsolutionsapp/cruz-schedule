@@ -29,7 +29,7 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - ATENÇÃO layout: não mexer no layout geral (colunas `.grid`, abas, cabeçalho da obra) sem mostrar antes — uma regra `.grid{grid-template-columns:minmax(0,1fr)}` no fim do CSS quebrou as 2 colunas no PC e o Bruno pediu pra voltar.
 - Avisos amarelos: botão "✓ Já conferi os avisos amarelos" (confirma) esconde os amarelos daquele dia (localStorage `ackAlerts-AAAA-MM-DD`, por aparelho, guarda o texto); aviso novo/diferente volta a aparecer; vermelhos nunca somem pelo botão; "mostrar de novo" desfaz. Sem nada visível → verde "Tudo certo". Contagem de avisos da barra de baixo ignora os conferidos.
 - Alerta na escala: 2+ obras da mesma companhia no mesmo endereço no dia → aviso amarelo (pode ser turma de outro setor ou obra duplicada).
-- Relatório do dia (painel na coluna da direita): resumo com obras, despachadas (só a hora de saída, sem atraso), escalados/presentes/faltas e nomes de quem faltou (de `attendance`); botão abre WhatsApp no `roster.boss`.
+- Relatório do dia (painel na coluna da direita): resumo com obras, despachadas (só a hora de saída, sem atraso), escalados/presentes/faltas e nomes de quem faltou (de `attendance`); "👷 *Fora do schedule* (N)" com os nomes do cadastro não escalados (sem day off) e "🌴 *Day off*: nomes", antes das Saídas; botão abre WhatsApp no `roster.boss`.
 - Links do WhatsApp (avisar equipe, relatório): usar `https://api.whatsapp.com/send?phone=X&text=Y`. NÃO usar `whatsapp://` (deu "não pode abrir o link") nem `wa.me` (troca os emojis por ?).
 
 ## Formato da mensagem do WhatsApp (não mudar sem pedir)
