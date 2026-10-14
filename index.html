@@ -57,6 +57,7 @@
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" id="tab-day" aria-selected="true">Escala do dia</button>
     <button class="tab" role="tab" id="tab-roster" aria-selected="false">Cadastro</button>
+    <button class="tab" role="tab" id="tab-search" aria-selected="false">🔍 Buscar</button>
     <button class="tab" role="tab" id="tab-photos" aria-selected="false" hidden>Fotos</button>
     <button class="tab" role="tab" id="tab-access" aria-selected="false" hidden>Acesso</button>
   </div>
@@ -94,6 +95,29 @@
           <div class="chips" id="free"></div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="view-search" hidden>
+    <div class="panel">
+      <h2>Buscar nas escalas</h2>
+      <div class="sfilters">
+        <input type="search" id="sQ" class="sq" list="sList" placeholder="Nome do funcionário, companhia ou endereço" aria-label="O que buscar" autocomplete="off">
+        <datalist id="sList"></datalist>
+        <select id="sType" aria-label="Buscar em">
+          <option value="all">Em tudo</option><option value="person">Funcionário</option><option value="company">Companhia / endereço</option>
+        </select>
+        <select id="sPeriod" aria-label="Período">
+          <option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 3 meses</option><option value="365">Último ano</option><option value="custom">Escolher datas</option>
+        </select>
+        <span class="scustom" id="sCustom" hidden>
+          <label>de <input type="date" id="sFrom"></label><label>até <input type="date" id="sTo"></label>
+        </span>
+      </div>
+      <p class="hint" id="sInfo">Digite um nome ou companhia. A busca ignora acentos e maiúsculas.</p>
+      <div id="sSummary"></div>
+      <div class="sresults" id="sResults"></div>
+      <button class="btn" id="sCsv" hidden>⬇️ Baixar resultado (.csv)</button>
     </div>
   </section>
 

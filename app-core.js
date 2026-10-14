@@ -525,7 +525,7 @@ $('copyMsg').onclick=()=>{
 };
 
 /* ---------- abas ---------- */
-function tab(which){['day','roster','access','photos'].forEach(t=>{const b=$('tab-'+t),v=$('view-'+t);if(b)b.setAttribute('aria-selected',t===which);if(v)v.hidden=t!==which})}
+function tab(which){['day','roster','access','photos','search'].forEach(t=>{const b=$('tab-'+t),v=$('view-'+t);if(b)b.setAttribute('aria-selected',t===which);if(v)v.hidden=t!==which})}
 $('tab-day').onclick=()=>{tab('day');renderJobs()};$('tab-roster').onclick=()=>{tab('roster');renderRoster()};if($('tab-access'))$('tab-access').onclick=()=>tab('access');
 
 /* ---------- cadastro ---------- */
@@ -960,6 +960,75 @@ $('tModal').addEventListener('click',e=>{if(e.target.id==='tYes')tCheckin();else
 $('tSearch').addEventListener('input',renderTotem);
 $('tExit').onclick=closeTotem;
 if($('openTotem')){$('openTotem').hidden=!P.escala||!!(ctx&&ctx.totem);$('openTotem').onclick=openTotem}
+
+/* ---------- aba Buscar: onde cada um trabalhou / quem foi em cada companhia ---------- */
+const fold=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+let SDAYS=null,SATT={},sKey='',sRows=[];
+function sRange(){
+  const p=$('sPeriod').value,today=new Date();
+  if(p==='custom'){const f=$('sFrom').value,t=$('sTo').value;return [f||iso(new Date(today.getFullYear(),today.getMonth(),today.getDate()-30)),t||iso(today)]}
+  const from=new Date(today.getFullYear(),today.getMonth(),today.getDate()-(+p));
+  const to=new Date(today.getFullYear(),today.getMonth(),today.getDate()+14);   // inclui escalas já lançadas pros próximos dias
+  return [iso(from),iso(to)];
+}
+async function sLoad(){
+  const [from,to]=sRange();const k=from+'|'+to;
+  if(SDAYS&&sKey===k)return;
+  sKey=k;SDAYS=null;$('sResults').innerHTML='<p class="hint">Carregando escalas…</p>';
+  try{
+    const q=await db.collection('days').where('date','>=',from).where('date','<=',to).orderBy('date','desc').limit(500).get();
+    SDAYS=q.docs.map(d=>d.data()).filter(d=>d&&Array.isArray(d.jobs));
+    SATT={};
+    try{const a=await db.collection('attendance').where('date','>=',from).where('date','<=',to).limit(2000).get();a.docs.forEach(d=>{const x=d.data();if(x&&x.jobId)SATT[x.date+'_'+x.jobId]=x})}catch(e){}
+  }catch(e){console.error(e);SDAYS=[];$('sResults').innerHTML='<p class="authmsg bad">Não consegui carregar ('+esc(e.code||'erro')+').</p>';return}
+}
+function sAtt(date,j,name){const a=SATT[date+'_'+j.id];if(!a||!a.people)return '';const k=Object.keys(a.people).find(n=>nkey(n)===nkey(name));return k?a.people[k]:''}
+async function runSearch(){
+  const q=fold($('sQ').value),type=$('sType').value;
+  $('sCustom').hidden=$('sPeriod').value!=='custom';
+  if(!q){$('sResults').innerHTML='';$('sSummary').innerHTML='';$('sCsv').hidden=true;$('sInfo').textContent='Digite um nome ou companhia. A busca ignora acentos e maiúsculas.';return}
+  await sLoad();if(!SDAYS)return;
+  sRows=[];
+  SDAYS.forEach(d=>(d.jobs||[]).forEach(j=>{
+    const coHit=type!=='person'&&(fold(j.company).includes(q)||fold(j.address).includes(q));
+    const people=type==='company'?[]:(j.crew||[]).filter(c=>fold(c.name).includes(q));
+    if(!coHit&&!people.length)return;
+    sRows.push({date:d.date,j,people,coHit});
+  }));
+  const [from,to]=sRange();
+  $('sInfo').textContent=`Período: ${from.split('-').reverse().join('/')} até ${to.split('-').reverse().join('/')} · ${SDAYS.length} dia(s) com escala`;
+  // resumo
+  const names=new Map(),cos=new Map();
+  sRows.forEach(r=>{r.people.forEach(c=>names.set(c.name,(names.get(c.name)||new Set()).add(r.date)));
+    const k=r.j.company||'Obra';cos.set(k,(cos.get(k)||0)+1)});
+  let sum='';
+  if(names.size===1){const [n,ds]=[...names][0];const byCo=new Map();sRows.forEach(r=>{if(r.people.length){const k=r.j.company||'Obra';byCo.set(k,(byCo.get(k)||0)+1)}});
+    const falt=sRows.filter(r=>r.people.length&&sAtt(r.date,r.j,r.people[0].name)==='out').length;
+    sum=`<div class="ssum"><b>${esc(n)}</b> foi escalado em <b>${ds.size} dia${ds.size>1?'s':''}</b>${falt?` · <span class="attout">faltou ${falt}</span>`:''}<div class="schips">${[...byCo].sort((a,b)=>b[1]-a[1]).map(([c,k])=>`<span class="chip">${esc(c)} <b>${k}</b></span>`).join('')}</div></div>`}
+  else if(sRows.length){sum=`<div class="ssum"><b>${sRows.length}</b> resultado${sRows.length>1?'s':''}${names.size?` · ${names.size} pessoa${names.size>1?'s':''}`:''} · ${cos.size} companhia${cos.size>1?'s':''}</div>`}
+  $('sSummary').innerHTML=sum;
+  $('sResults').innerHTML=sRows.length?sRows.map(r=>{
+    const who=r.people.length?r.people:(r.coHit?r.j.crew||[]:[]);
+    return `<button class="srow" data-sgo="${esc(r.date)}" data-sjob="${esc(r.j.id)}">
+      <span class="sdate">${esc(dateBR(r.date))}</span>
+      <span class="smain"><b>${esc(r.j.company||'Obra')}</b><small>${esc(r.j.waiting?'(Esperando endereço)':r.j.address||'')}</small>
+      <span class="swho">${who.map(c=>{const s=sAtt(r.date,r.j,c.name);const hit=r.people.includes(c);
+        return `<span class="${hit?'shit':''}">${s==='in'?'<i class="attmark in">✓</i>':s==='out'?'<i class="attmark out">✗</i>':''}${esc(c.name)}${c.v?' '+esc(vLabel(c.v)):''}</span>`}).join(', ')}</span></span></button>`}).join('')
+    :'<p class="empty">Nada encontrado nesse período. Tente outro nome ou aumente o período.</p>';
+  $('sCsv').hidden=!sRows.length||!P.backup;
+}
+let sT=null;
+$('sQ').addEventListener('input',()=>{clearTimeout(sT);sT=setTimeout(runSearch,250)});
+['sType','sPeriod','sFrom','sTo'].forEach(id=>$(id).addEventListener('change',runSearch));
+$('sResults').addEventListener('click',e=>{const b=e.target.closest('[data-sgo]');if(!b)return;const jid=b.dataset.sjob;
+  setDate(b.dataset.sgo);tab('day');let n=0;const go=()=>{const c=document.querySelector('.job[data-id="'+jid+'"]');if(c){c.scrollIntoView({block:'start',behavior:'smooth'});c.classList.add('flash');setTimeout(()=>c.classList.remove('flash'),1600)}else if(n++<20)setTimeout(go,150)};go()});
+$('sCsv').onclick=async e=>{const rows=[['Data','Companhia','Endereço','Trabalhador','Veículo','Presença']];
+  sRows.forEach(r=>(r.people.length?r.people:(r.j.crew||[])).forEach(c=>{const s=sAtt(r.date,r.j,c.name);rows.push([r.date,r.j.company,r.j.waiting?'(Esperando)':r.j.address,c.name,c.v==='own'?'Carro próprio':(c.v||''),s==='in'?'Veio':s==='out'?'Faltou':''])}));
+  await offer('busca_'+fold($('sQ').value).replace(/[^\w]+/g,'-').slice(0,40)+'.csv',toCSV(rows),e.currentTarget)};
+$('tab-search').onclick=()=>{tab('search');
+  $('sList').innerHTML=[...new Set([...S.workers,...Object.keys(S.companies)])].sort((a,b)=>a.localeCompare(b,'pt')).map(x=>`<option value="${esc(x)}">`).join('');
+  SDAYS=null;sKey='';if($('sQ').value)runSearch();setTimeout(()=>$('sQ').focus(),50)};
+if(viewer)$('tab-search').hidden=true;
 
 /* ---------- início ---------- */
 (()=>{const tb=$('topbar');if(!tb)return;const set=()=>document.documentElement.style.setProperty('--topH',tb.offsetHeight+'px');set();

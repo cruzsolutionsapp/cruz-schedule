@@ -20,6 +20,7 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - `attendance/{data_jobId}`: `{date, jobId, site, company, driver, by, people{nome:'in'|'out'}, times{nome:ms do check-in no totem}, at, atMs}` presença marcada pelo motorista (painel "Minha obra hoje"); escritório vê no cartão da obra e nos avisos.
 - Modo Totem (tablet no shop): tela separada `#totem` (abre pelo botão em Cadastro → Acesso, pelo link `#totem`, ou sozinho no login com perm `totem`). Toca no nome → grava people='in' + times. Escritório vê a hora ao lado do nome; atrasado = depois do horário do shop. Perm `totem` é false por padrão.
 - Link de demonstração: `…/cruz-schedule/#demo` abre sem login, com dados inventados num banco em memória (`memDb`/`demoSeed` em auth.js). Nada é salvo nem lê dados reais.
+- Aba 🔍 Buscar: busca em `days` (e presença em `attendance`) por funcionário, companhia ou endereço, com período (7/30/90/365 dias ou datas). Sem acento/maiúscula. Clicar no resultado abre o dia e destaca a obra. Baixa .csv (perm backup).
 
 ## Formato da mensagem do WhatsApp (não mudar sem pedir)
 ```
