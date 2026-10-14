@@ -155,6 +155,8 @@ function analyze(){
   const out=[];
   dupNames.forEach(k=>{const n=D.jobs.flatMap(j=>j.crew).find(c=>c.name.trim().toLowerCase()===k).name;out.push(['bad',`${n} está em ${byName[k].length} obras: ${byName[k].join(', ')}`])});
   Object.keys(byVeh).filter(v=>byVeh[v].length>1).forEach(v=>out.push(['bad',`Veículo ${v} está em ${byVeh[v].length} obras: ${byVeh[v].join(', ')}`]));
+  {const seen={};D.jobs.forEach(j=>{if(j.waiting||!j.address.trim())return;const k=akey((j.company||'')+'|'+j.address);(seen[k]=seen[k]||[]).push(j)});
+    Object.values(seen).filter(a=>a.length>1).forEach(a=>out.push(['warn',`${a.length} obras da ${a[0].company||'mesma companhia'} no mesmo endereço (${a[0].address}). Se são turmas de setores diferentes, tudo certo; se não, pode ser obra duplicada.`]))}
   D.jobs.forEach(j=>j.crew.filter(c=>isOff(c.name)).forEach(c=>out.push(['bad',`🌴 ${c.name} está de day off neste dia, mas está em ${j.company||'uma obra'}. Tire ele da obra (ou tire o day off no Calendário).`])));
   D.jobs.forEach(j=>{
     const nm=j.company||'Obra sem nome';
@@ -477,7 +479,7 @@ $('jobs').addEventListener('click',e=>{
   else if(act==='extra'){const inp=$('extra-'+j.id);const n=fmtName(inp.value);if(n&&isOff(n)){toast(offMsg(n));return}if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:autoVeh(n,j)})}
   else if(act==='up'&&i>0){jobs.splice(i,1);jobs.splice(i-1,0,j)}
   else if(act==='down'&&i<jobs.length-1){jobs.splice(i,1);jobs.splice(i+1,0,j)}
-  else if(act==='left'){j.left=j.left?0:Date.now();openLeft.delete(j.id);if(j.left&&j.allWeek){saveDay();copyJobToNext(j,b)}}   // All Week: ao confirmar a saída, já vai pro dia seguinte
+  else if(act==='left'){j.left=j.left?0:Date.now();openLeft.delete(j.id);if(j.left&&j.allWeek){saveDay();copyJobToNext(j,b,true)}}   // All Week: ao confirmar a saída, já vai pro dia seguinte
   else if(act==='auto'){j.autoShop=true;recompute(j)}
   else if(act==='early'){j.early=+b.dataset.m;recompute(j)}
   else if(act==='calc'){lookupTravel(j);return}
@@ -491,16 +493,23 @@ $('jobs').addEventListener('click',e=>{
 });
 
 /* copiar uma obra só pro dia seguinte (não mexe nas outras) */
-async function copyJobToNext(j,btn){
+// src = id da obra original (a cópia guarda de onde veio), pra saber se é a MESMA turma ou outra turma no mesmo endereço
+const srcOf=x=>x.src||x.id;
+async function copyJobToNext(j,btn,auto){
   const [y,m,d]=cur.split('-').map(Number);const next=iso(new Date(y,m-1,d+1));
   const nice=dateBR(next);btn.disabled=true;
   try{
     const snap=await db.doc(dayPath(next)).get();const day=snap.exists?snap.data():{date:next,jobs:[],sent:{}};
     const jobs=Array.isArray(day.jobs)?day.jobs:[];
     const key=x=>akey((x.company||'')+'|'+(x.address||''));
-    if(jobs.some(x=>key(x)===key(j))){toast(`${j.company||'Essa obra'} já está em ${nice}`);return}
+    if(jobs.some(x=>srcOf(x)===srcOf(j))){toast(`Essa turma da ${j.company||'obra'} já está em ${nice}`);return}
+    const same=jobs.filter(x=>key(x)===key(j));
+    if(same.length){
+      if(auto){if(same.some(x=>!x.src))return}   // All Week automático: cópia antiga (sem src) = mesma obra, não duplica
+      else if(!confirm(`Já tem ${same.length>1?same.length+' obras':'uma obra'} da ${j.company||'companhia'} nesse endereço em ${nice}.\n\nÉ outra turma (outro setor)? Toque OK pra copiar mesmo assim.`))return;
+    }
     const {calc,prevAddr,left,...rest}=clone(j);
-    jobs.push(Object.assign(rest,{id:nid()}));
+    jobs.push(Object.assign(rest,{id:nid(),src:srcOf(j)}));
     const drivers={};jobs.forEach(x=>{const n=jobDrivers({crew:x.crew||[]});if(n.length)drivers[x.id]=n});
     await db.doc(dayPath(next)).set({date:next,jobs,sent:day.sent||{},drivers});
     toast(`✓ ${j.company||'Obra'} copiada pra ${nice}`);
@@ -537,12 +546,16 @@ $('bringWeek').onclick=async()=>{
       days.sort((a,b)=>a.date.localeCompare(b.date))}
   }catch(e){toast('Não consegui buscar os dias da semana');return}
   const key=j=>akey((j.company||'')+'|'+(j.address||''));
-  const found=new Map();days.forEach(b=>(b.jobs||[]).forEach(j=>{if(j.allWeek)found.set(key(j),j)}));
-  const have=new Set(D.jobs.map(key));
-  const add=[...found.values()].filter(j=>!have.has(key(j)));
+  // cada turma = src (id da obra original). Obras antigas sem src: mesma companhia+endereço em dias diferentes = mesma obra.
+  const found=new Map();days.forEach(b=>(b.jobs||[]).forEach(j=>{if(!j.allWeek)return;
+    let k='S:'+srcOf(j);
+    if(!j.src&&!found.has(k)){const old=[...found.entries()].find(([,v])=>key(v.j)===key(j)&&v.date!==b.date&&!v.j.src);if(old)k=old[0]}
+    found.set(k,{j,date:b.date})}));
+  const haveSrc=new Set(D.jobs.map(srcOf)),haveKey=new Set(D.jobs.filter(x=>!x.src).map(key));
+  const add=[...found.values()].map(v=>v.j).filter(j=>!haveSrc.has(srcOf(j))&&!(haveKey.has(key(j))&&!j.src));
   if(!found.size){toast('Nenhuma obra marcada como All Week nesta semana');return}
   if(!add.length){toast('As obras All Week já estão neste dia');return}
-  add.forEach(j=>D.jobs.push({...clone(j),id:nid(),left:0}));
+  add.forEach(j=>D.jobs.push({...clone(j),id:nid(),src:srcOf(j),left:0}));
   saveDay();renderJobs();toast(add.length+(add.length>1?' obras trazidas':' obra trazida'));
 };
 $('clearDay').onclick=()=>{if(!P.apagar)return;if(confirmClear){D.jobs=[];D.sent={};confirmClear=false;$('clearDay').textContent='Limpar dia';saveDay();renderJobs()}else{confirmClear=true;$('clearDay').textContent='Toque de novo pra limpar'}};
@@ -1168,7 +1181,7 @@ $('central').addEventListener('click',e=>{
   if(act){const k=act.dataset.cact;
     if(k==='unlock'){pinOpen();return}
     if(!cUnlocked)return;const j=findJob(act.dataset.cj2);if(!j)return;
-    if(k==='left'){j.left=j.left?0:Date.now();openLeft.delete(j.id);saveDay();if(j.left&&j.allWeek)copyJobToNext(j,{});renderJobs();renderCentral();toast(j.left?'✓ '+(tidy(j.company)||'Obra')+' despachada':'Despacho desfeito')}
+    if(k==='left'){j.left=j.left?0:Date.now();openLeft.delete(j.id);saveDay();if(j.left&&j.allWeek)copyJobToNext(j,{},true);renderJobs();renderCentral();toast(j.left?'✓ '+(tidy(j.company)||'Obra')+' despachada':'Despacho desfeito')}
     else if(k==='edit'){const id=j.id;cUnlocked=false;cDetail=null;clearTimeout(cIdle);closeCentral();tab('day');$('cBack').hidden=false;backIdle();
       openLeft.set(id,true);renderJobs();setTimeout(()=>{const card=document.querySelector('.job[data-id="'+id+'"]');if(card)card.scrollIntoView({block:'start',behavior:'smooth'})},50)}
     return}
