@@ -45,7 +45,12 @@ function flush(path){
 }
 // drivers: {jobId:[nomes com veículo]} — o banco usa pra conferir que só o motorista daquela obra marca presença/fotos
 // Responsável pela obra = quem está marcado como Motorista no Cadastro, ou quem está com veículo da empresa
-const isDriverName=n=>!!(S&&S.drivers||[]).find(x=>nkey(x)===nkey(n));
+// Carro fixo (Cadastro → Veículos): vehicles[].d = motorista fixo daquele carro (ex.: Thiesny → 47)
+const fixedVeh=n=>{const v=(S&&S.vehicles||[]).find(x=>x.d&&x.n&&nkey(x.d)===nkey(n));return v?v.n:''};
+const isDriverName=n=>!!((S&&S.drivers||[]).find(x=>nkey(x)===nkey(n))||fixedVeh(n));
+// ao escalar alguém com carro fixo, o carro já entra (se não estiver em outra obra no mesmo dia); dá pra trocar na lista
+function autoVeh(n,j){const fv=fixedVeh(n);if(!fv)return '';const other=D.jobs.find(x=>x!==j&&x.crew.some(c=>c.v===fv))||(j.crew.some(c=>c.v===fv)?j:null);
+  if(other){toast(`O ${fv} do ${n} já está em ${other===j?'outra pessoa desta obra':other.company||'outra obra'}`);return ''}return fv}
 const jobDrivers=j=>j.crew.filter(c=>isCompanyVeh(c.v)||isDriverName(c.name)).sort((a,b)=>(isDriverName(b.name)?1:0)-(isDriverName(a.name)?1:0)).map(c=>c.name);
 const driversMap=()=>{const m={};D.jobs.forEach(j=>{const n=jobDrivers(j);if(n.length)m[j.id]=n});return m};
 const saveDay=()=>(P.escala||P.telefones)&&(lastDrivers=driversMap(),queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{},drivers:lastDrivers}));
@@ -448,8 +453,8 @@ $('jobs').addEventListener('click',e=>{
   else if(act==='mup'||act==='mdown'){const a=+b.dataset.ci,t=act==='mup'?a-1:a+1;if(t<0||t>=j.crew.length)return;[j.crew[a],j.crew[t]]=[j.crew[t],j.crew[a]]}
   else if(act==='pickopen'){openPick=j.id;changed=false}
   else if(act==='pickclose'){openPick=null;changed=false}
-  else if(act==='pick'){const n=b.dataset.name;if(!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:''})}
-  else if(act==='extra'){const inp=$('extra-'+j.id);const n=fmtName(inp.value);if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:''})}
+  else if(act==='pick'){const n=b.dataset.name;if(!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:autoVeh(n,j)})}
+  else if(act==='extra'){const inp=$('extra-'+j.id);const n=fmtName(inp.value);if(n&&!j.crew.some(c=>c.name.toLowerCase()===n.toLowerCase()))j.crew.push({name:n,v:autoVeh(n,j)})}
   else if(act==='up'&&i>0){jobs.splice(i,1);jobs.splice(i-1,0,j)}
   else if(act==='down'&&i<jobs.length-1){jobs.splice(i,1);jobs.splice(i+1,0,j)}
   else if(act==='left'){j.left=j.left?0:Date.now();openLeft.delete(j.id);if(j.left&&j.allWeek){saveDay();copyJobToNext(j,b)}}   // All Week: ao confirmar a saída, já vai pro dia seguinte
@@ -551,7 +556,9 @@ function renderRoster(){
     <button class="x" data-wi="${i}" aria-label="Remover ${esc(w)}">×</button></div>`).join('')||'<span class="empty">Nenhum trabalhador cadastrado ainda.</span>';
   $('vehicles').innerHTML=S.vehicles.map((v,i)=>`<div class="lrow">
     <select data-vi="${i}" data-k="t" aria-label="Tipo" id="vt-${i}"><option${v.t==='🛻'?' selected':''}>🛻</option><option${v.t==='🚐'?' selected':''}>🚐</option><option${v.t==='🚚'?' selected':''}>🚚</option></select>
-    <input class="grow" data-vi="${i}" data-k="n" value="${esc(v.n)}" inputmode="numeric" aria-label="Número" id="veh-${i}">
+    <input class="vnum" data-vi="${i}" data-k="n" value="${esc(v.n)}" inputmode="numeric" aria-label="Número" id="veh-${i}">
+    <select class="grow vdsel" data-vi="${i}" data-k="d" aria-label="Motorista fixo do ${esc(v.n)}" id="vd-${i}"><option value="">Sem motorista fixo</option>${
+      [...new Set([...S.workers,...(v.d?[v.d]:[])])].map(w=>`<option${v.d===w?' selected':''}>${esc(w)}</option>`).join('')}</select>
     <button class="x" data-vdel="${i}" aria-label="Remover veículo">×</button></div>`).join('')||'<span class="empty">Nenhum veículo cadastrado.</span>';
   $('companies').innerHTML=Object.keys(S.companies).sort((a,b)=>a.localeCompare(b)).map((c,i)=>`<div class="coblock">
     <div class="cohead"><b>${esc(c)}</b><span class="cocount">${S.companies[c].length} endereço${S.companies[c].length===1?'':'s'}</span>
@@ -569,6 +576,7 @@ $('workers').addEventListener('change',e=>{const i=e.target.dataset.wn;if(i==nul
   if(S.workers.some((w,k)=>k!==+i&&nkey(w)===nkey(nv))){toast('Já existe alguém com esse nome');e.target.value=old;return}
   S.workers[+i]=nv;
   S.drivers=S.drivers.map(x=>nkey(x)===nkey(old)?nv:x);
+  S.vehicles.forEach(v=>{if(v.d&&nkey(v.d)===nkey(old))v.d=nv});
   const pk=Object.keys(PH).find(p=>nkey(p)===nkey(old));if(pk){PH[nv]=PH[pk];delete PH[pk];savePhones()}
   let touched=false;D.jobs.forEach(j=>j.crew.forEach(c=>{if(nkey(c.name)===nkey(old)){c.name=nv;touched=true}}));
   if(D.sent&&D.sent[nkey(old)]){D.sent[nkey(nv)]=D.sent[nkey(old)];delete D.sent[nkey(old)];touched=true}
@@ -584,9 +592,10 @@ $('workers').addEventListener('change',e=>{const n=e.target.dataset.wp;if(n==nul
 $('workers').onclick=e=>{
   const t=e.target.closest('[data-drv]');
   if(t){if(!P.cadastro)return;const w=S.workers[+t.dataset.drv];const on=isDriverName(w);
+    if(on&&fixedVeh(w)){toast(w+' é motorista fixo do '+fixedVeh(w)+'. Pra desmarcar, tire ele do carro em Veículos.');return}
     S.drivers=on?S.drivers.filter(x=>nkey(x)!==nkey(w)):[...S.drivers,w];saveRoster();renderRoster();
     if(P.escala&&D.jobs.length)saveDay();renderJobs();toast(on?w+' não é mais motorista':w+' marcado como motorista');return}
-  const b=e.target.closest('[data-wi]');if(b){const w=S.workers[+b.dataset.wi];S.workers.splice(+b.dataset.wi,1);S.drivers=S.drivers.filter(x=>nkey(x)!==nkey(w));saveRoster();renderRoster();refresh(false)}};
+  const b=e.target.closest('[data-wi]');if(b){const w=S.workers[+b.dataset.wi];S.workers.splice(+b.dataset.wi,1);S.drivers=S.drivers.filter(x=>nkey(x)!==nkey(w));S.vehicles.forEach(v=>{if(v.d&&nkey(v.d)===nkey(w))delete v.d});saveRoster();renderRoster();refresh(false)}};
 function addWorker(){const n=fmtName($('newWorker').value);if(n&&!S.workers.some(w=>w.toLowerCase()===n.toLowerCase())){S.workers.push(n);S.workers.sort((a,b)=>a.localeCompare(b,'pt'));saveRoster();renderRoster();refresh(false)}$('newWorker').value='';$('newWorker').focus()}
 $('bulkAdd').onclick=()=>{
   if(!P.cadastro)return;
@@ -608,7 +617,11 @@ $('bulkAdd').onclick=()=>{
   toast(`${added} adicionado${added===1?'':'s'}`+(phones?`, ${phones} telefone${phones===1?'':'s'}`:'')+(dup?` · ${dup} já existia${dup===1?'':'m'}`:''));
 };
 $('addWorker').onclick=addWorker;$('newWorker').onkeydown=e=>{if(e.key==='Enter')addWorker()};
-$('vehicles').addEventListener('input',e=>{const t=e.target;if(t.dataset.vi!=null){S.vehicles[+t.dataset.vi][t.dataset.k]=t.value.trim();saveRoster()}});
+$('vehicles').addEventListener('input',e=>{const t=e.target;if(t.dataset.vi!=null){
+  const k=t.dataset.k,val=t.value.trim(),veh=S.vehicles[+t.dataset.vi];
+  if(k==='d'){if(val){const dup=S.vehicles.find(x=>x!==veh&&x.d===val);if(dup){delete dup.d;toast(val+' saiu do '+dup.n+' e agora é motorista fixo do '+(veh.n||'carro'))}veh.d=val}else delete veh.d;
+    saveRoster();renderRoster();if(P.escala&&D.jobs.length)saveDay();renderJobs();return}
+  veh[k]=val;saveRoster()}});
 $('vehicles').onclick=e=>{const b=e.target.closest('[data-vdel]');if(b){S.vehicles.splice(+b.dataset.vdel,1);saveRoster();renderRoster()}};
 $('addVehicle').onclick=()=>{S.vehicles.push({n:'',t:'🛻'});saveRoster();renderRoster();const el=$('veh-'+(S.vehicles.length-1));if(el)el.focus()};
 $('companies').addEventListener('change',e=>{const c=e.target.dataset.off;if(c==null)return;const v=fmtAddress(e.target.value);e.target.value=v;if(v)S.offices[c]=v;else delete S.offices[c];saveRoster()});
