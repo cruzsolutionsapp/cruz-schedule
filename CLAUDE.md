@@ -23,7 +23,7 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - Aba 🔍 Buscar: busca em `days` (e presença em `attendance`) por funcionário, companhia ou endereço, com período (7/30/90/365 dias ou datas). Sem acento/maiúscula. Clicar no resultado abre o dia e destaca a obra. Baixa .csv (perm backup).
 - Aba 📅 Calendário: mês com as obras de cada dia (lê `days` do intervalo, ao vivo). "+ Agendamento" grava a obra direto em `days/AAAA-MM-DD` (equipe vazia, `need` = quantas pessoas; repetir até X pulando fim de semana; All Week). Livres = total de `workers` − soma de max(need, equipe). No dia só aparece uma bolinha de cor (verde/laranja ≥85%/vermelho acima); os números aparecem no topo (#calInfo) ao passar o mouse, e no painel do dia ao tocar.
 - Relatório do dia (painel na coluna da direita): resumo com obras, despachadas (só a hora de saída, sem atraso), escalados/presentes/faltas e nomes de quem faltou (de `attendance`); botão abre WhatsApp no `roster.boss`.
-- Links do WhatsApp (avisar equipe, relatório): um listener troca `https://api.whatsapp.com/send?…` por `whatsapp://send?…` (abre o app direto); se a página não perder o foco em 1,5s, abre o site como reserva.
+- Links do WhatsApp (avisar equipe, relatório): na hora do clique um listener troca `https://api.whatsapp.com/send?phone=X&text=Y` por `https://wa.me/X?text=Y` (no celular abre o app direto). Não usar `whatsapp://` — deu erro "não pode abrir o link".
 
 ## Formato da mensagem do WhatsApp (não mudar sem pedir)
 ```
