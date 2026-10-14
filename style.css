@@ -383,3 +383,6 @@ body.viewer{padding-bottom:24px}
 .swho i{font-style:normal}
 .job.flash{box-shadow:0 0 0 3px var(--hivis)}
 @media (max-width:520px){.srow{flex-direction:column;gap:2px}.sdate{width:auto}}
+
+.searchbtn{margin-left:4px}
+.searchbtn[aria-selected="true"]{border-color:var(--hivis);background:var(--hivis-soft)}
