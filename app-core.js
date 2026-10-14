@@ -1033,6 +1033,15 @@ if(viewer)$('tab-search').hidden=true;
 /* ---------- início ---------- */
 (()=>{const tb=$('topbar');if(!tb)return;const set=()=>document.documentElement.style.setProperty('--topH',tb.offsetHeight+'px');set();
   try{new ResizeObserver(set).observe(tb)}catch(e){window.addEventListener('resize',set)}})();
+// Botão Buscar centralizado embaixo do quadradinho da data
+(()=>{const b=$('tab-search'),d=$('date');if(!b||!d)return;const row=b.parentElement;
+  const align=()=>{b.style.marginRight='0px';if(b.hidden||!d.offsetWidth)return;
+    const dr=d.getBoundingClientRect(),rr=row.getBoundingClientRect(),bw=b.offsetWidth;
+    let prevRight=rr.left;[...row.children].forEach(x=>{if(x!==b&&!x.hidden&&x.offsetWidth){prevRight=Math.max(prevRight,x.getBoundingClientRect().right)}});
+    let mr=rr.right-(dr.left+dr.width/2+bw/2);mr=Math.min(mr,rr.right-prevRight-8-bw);b.style.marginRight=Math.max(0,Math.round(mr))+'px'};
+  window.addEventListener('resize',align);try{new ResizeObserver(align).observe($('topbar'))}catch(e){}
+  try{new MutationObserver(align).observe(row,{attributes:true,subtree:true,attributeFilter:['hidden']})}catch(e){}
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(align);setTimeout(align,300);align()})();
 if(viewer)tab('day');
 $('date').value=cur;
 S=normRoster(null);
