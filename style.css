@@ -484,12 +484,12 @@ body.viewer{padding-bottom:24px}
 .crl{cursor:pointer}
 .crl{display:grid;grid-template-columns:16px 1.6fr 1fr 1.2fr auto;align-items:center;gap:22px}
 .cdot2{width:16px;height:16px;border-radius:50%;background:var(--bad)}
-.crow.done .cdot2{background:var(--hivis)} .crow.done{opacity:.8}
+.crow.done .cdot2{background:var(--ok)} .crow.done{opacity:.8}
 .cn{font-family:var(--f-display);font-size:1.75em;font-weight:600;line-height:1.05;min-width:0}
 .cn small{display:block;font-family:var(--f-body);font-size:.5em;color:var(--muted);font-weight:400;margin-top:4px}
 .ct{color:var(--muted)} .ct b{color:var(--ink);font-size:1.25em}
 .cst{justify-self:start;font-weight:700;padding:7px 14px;border-radius:10px;white-space:nowrap}
-.cst.late{background:var(--bad);color:#fff} .cst.wait{background:var(--bad-soft);color:var(--bad)} .cst.done{background:var(--hivis);color:var(--hivis-ink)}
+.cst.late{background:var(--bad);color:#fff} .cst.wait{background:var(--bad-soft);color:var(--bad)} .cst.done{background:var(--ok);color:var(--surface)}
 .cc{text-align:right;font-family:var(--f-display);font-size:1.6em;line-height:1}
 .cc small{display:block;font-family:var(--f-body);font-size:.45em;color:var(--muted)}
 .crow .ccrew{margin:14px 0 0 38px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
@@ -530,7 +530,7 @@ body.viewer{padding-bottom:24px}
 /* Central: quadradinhos + páginas (painel de aeroporto) */
 .cgrid{display:grid;grid-template-columns:repeat(var(--cols,2),1fr);gap:12px;align-content:start}
 .ctile2{background:var(--surface);border:1px solid var(--line);border-left:8px solid var(--bad);border-radius:14px;padding:12px 16px;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-width:0}
-.ctile2.done{border-left-color:var(--hivis);opacity:.8}
+.ctile2.done{border-left-color:var(--ok);opacity:.8}
 .ctile2.wait{border-left-color:var(--bad-soft)}
 .ctile2 .cdot2{display:none}
 .t2h{display:flex;align-items:baseline;gap:10px;min-width:0}

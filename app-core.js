@@ -1051,7 +1051,7 @@ if($('openTotem')){$('openTotem').hidden=!P.escala||!!(ctx&&ctx.totem);$('openTo
 
 /* ---------- Central (tela do escritório: TV/tablet, só pra ver) ----------
    Abre por #central (com login) ou #demo-central (dados de exemplo). Mostra sempre o dia de hoje, ao vivo. */
-let centralOn=false,cTimer=null,cUnsub=null,cLock=null;
+let centralOn=false,cTimer=null,cUnsub=null,cLock=null,cWake=null;
 const hm12=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
 async function keepAwake(){try{if(centralOn&&navigator.wakeLock&&document.visibilityState==='visible')cLock=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',keepAwake);
@@ -1059,8 +1059,16 @@ function openCentral(){
   centralOn=true;document.body.classList.add('totem-on');$('central').hidden=false;
   if(cur!==todayISO())setDate(todayISO());
   watchNextDays();renderCentral();keepAwake();
-  const openedOn=todayISO();
-  clearInterval(cTimer);cTimer=setInterval(()=>{if(todayISO()!==openedOn&&!cUnlocked&&!cDetail&&$('cPin').hidden){location.reload();return}if(cur!==todayISO())setDate(todayISO());renderCentral()},20000);   // virou o dia: recarrega (pega a versão nova do app)
+  const openedOn=todayISO();let lastBeat=Date.now(),lastFull=Date.now();
+  // batida a cada 1s: relógio sempre certo; se a TV "dormiu" (página parada > 1 min) ou virou o dia, atualiza na hora que acorda
+  const beat=()=>{if(!centralOn)return;const now=Date.now(),slept=now-lastBeat>60000;lastBeat=now;
+    if(todayISO()!==openedOn&&!cUnlocked&&!cDetail&&$('cPin').hidden){location.reload();return}
+    $('cClock').textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase();
+    if(slept){checkUpdate()}
+    if(slept||now-lastFull>=20000){lastFull=now;if(cur!==todayISO())setDate(todayISO());renderCentral()}};
+  clearInterval(cTimer);cTimer=setInterval(beat,1000);
+  cWake=()=>{lastBeat=0;beat()};
+  if(!openCentral.hooked){openCentral.hooked=1;['visibilitychange','focus','pageshow','online'].forEach(ev=>window.addEventListener(ev,()=>{if(centralOn&&cWake)cWake()}))}
 }
 function closeCentral(){
   centralOn=false;clearInterval(cTimer);if(cUnsub){cUnsub();cUnsub=null}
