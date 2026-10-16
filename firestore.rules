@@ -79,6 +79,12 @@ service cloud.firestore {
       allow update: if can('cadastro') || (can('escala') && onlyChanged(['companies', 'travel', 'offices']));
     }
 
+    // "Atualizar a TV": quem edita escala manda a TV recarregar
+    match /config/tvping {
+      allow read: if isMember();
+      allow write: if can('escala');
+    }
+
     // Telefones: só quem tem "Telefones e avisar equipe"
     match /config/phones {
       allow read, write: if can('telefones');

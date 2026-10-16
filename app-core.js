@@ -459,7 +459,7 @@ function refresh(save=true){
   const ack=ackGet(),out=all.filter(o=>!(o[0]==='warn'&&ack.includes(o[1]))),nAck=all.length-out.length,nWarn=out.filter(o=>o[0]==='warn').length;
   $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('')
     +(nWarn&&!viewer?`<button class="linkbtn ackbtn" id="ackAlerts">✓ Já conferi os avisos amarelos</button>`:'')
-    +(P.escala?`<div class="histlinks"><button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button><button class="linkbtn histlink" id="openImp">📋 Colar mensagem do WhatsApp</button></div>`:'')
+    +(P.escala?`<div class="histlinks"><button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button><button class="linkbtn histlink" id="openImp">📋 Colar mensagem do WhatsApp</button><button class="linkbtn histlink" id="openTv">📺 Ver a TV</button><button class="linkbtn histlink" id="pingTv">🔄 Atualizar a TV</button></div>`:'')
     +(D.jobs.length>1?`<div class="histlinks">${D.jobs.every(isCollapsed)?'<button class="linkbtn histlink" id="expandAll">▾ Abrir todas</button>':'<button class="linkbtn histlink" id="collapseAll">▸ Recolher todas</button>'}${P.escala&&D.jobs.some(j=>!j.left)?'<button class="linkbtn histlink" id="leftAll">✅ Despachar todas</button>':''}</div>`:'')
     +(nAck?`<small class="ackinfo">${nAck} aviso${nAck>1?'s':''} já conferido${nAck>1?'s':''} · <button class="linkbtn" id="ackUndo">mostrar de novo</button></small>`:'');
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
@@ -699,7 +699,9 @@ $('histDlg').addEventListener('click',e=>{
   if(!confirm(`Voltar a escala de ${dateBR(cur)} para como estava às ${new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase()}?\n\n(${h.n} obras · ${h.people} pessoas · ${h.left} despachadas)\n\nA versão de agora também fica guardada no histórico.`))return;
   D=normDay({date:cur,jobs:h.jobs||[],sent:h.sent||{}});saveDay();renderJobs();closeHist();toast('✓ Escala voltou pra versão das '+new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase());
 });
-$('alerts').addEventListener('click',e=>{if(e.target.id==='leftAll'&&P.escala){const pend=D.jobs.filter(j=>!j.left);if(!pend.length)return;
+$('alerts').addEventListener('click',e=>{if(e.target.id==='openTv'){openCentral();return}
+  if(e.target.id==='pingTv'){db.doc('config/tvping').set({at:Date.now(),by:(ctx&&ctx.email)||''}).then(()=>toast('✓ Pedido enviado: a TV recarrega em alguns segundos'),err=>{console.error(err);toast('Não consegui avisar a TV ('+(err.code||'erro')+'). Atualize as regras do Firebase.')});return}
+  if(e.target.id==='leftAll'&&P.escala){const pend=D.jobs.filter(j=>!j.left);if(!pend.length)return;
     const n=new Date(),def=n.getHours()+':'+pad(n.getMinutes());const t=prompt(`Marcar ${pend.length} obra${pend.length>1?'s':''} que ainda ${pend.length>1?'estão':'está'} aguardando como DESPACHADA${pend.length>1?'S':''}.\n\nQue horas saíram? (ex.: 6:00 ou 6:30am)`,def);if(t===null)return;
     const hh=to24(/[ap]m/i.test(t)?t:(+t.split(':')[0]<12&&+t.split(':')[0]>=5?t+'am':t))||to24(t);if(!hh){toast('Horário não entendido. Use por exemplo 6:00');return}
     const ms=new Date(cur+'T'+hh+':00').getTime();pend.forEach(j=>{j.left=ms;openLeft.delete(j.id)});saveDay();pend.filter(j=>j.allWeek).forEach(j=>copyJobToNext(j,{},true));renderJobs();renderCentral();toast(`✓ ${pend.length} obra${pend.length>1?'s':''} despachada${pend.length>1?'s':''} às ${fmt(hh)}`);return}
@@ -1179,10 +1181,15 @@ let centralOn=false,cTimer=null,cUnsub=null,cLock=null,cWake=null;
 const hm12=ms=>new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
 async function keepAwake(){try{if(centralOn&&navigator.wakeLock&&document.visibilityState==='visible')cLock=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',keepAwake);
+// "🔄 Atualizar a TV": grava config/tvping {at}; a TV (aberta pelo link #central) recarrega a tela quando o valor muda
+let tvUnsub=null,tvSeen=null;
+function watchTvPing(){if(tvUnsub)return;tvSeen=null;
+  try{tvUnsub=db.doc('config/tvping').onSnapshot(sn=>{const at=sn.exists?(sn.data()||{}).at||0:0;
+    if(tvSeen===null){tvSeen=at;return}if(at!==tvSeen&&/central/.test(location.hash)&&!cUnlocked&&!cDetail&&$('cPin').hidden)location.reload();tvSeen=at},e=>console.error(e))}catch(e){}}
 function openCentral(){
   centralOn=true;document.body.classList.add('totem-on');$('central').hidden=false;
   if(cur!==todayISO())setDate(todayISO());
-  watchNextDays();renderCentral();keepAwake();
+  watchNextDays();watchTvPing();renderCentral();keepAwake();
   const openedOn=todayISO();let lastBeat=Date.now(),lastFull=Date.now();
   // batida a cada 1s: relógio sempre certo; se a TV "dormiu" (página parada > 1 min) ou virou o dia, atualiza na hora que acorda
   const beat=()=>{if(!centralOn)return;const now=Date.now(),slept=now-lastBeat>60000;lastBeat=now;
@@ -1195,7 +1202,7 @@ function openCentral(){
   if(!openCentral.hooked){openCentral.hooked=1;['visibilitychange','focus','pageshow','online'].forEach(ev=>window.addEventListener(ev,()=>{if(centralOn&&cWake)cWake()}))}
 }
 function closeCentral(){
-  centralOn=false;clearInterval(cTimer);if(cUnsub){cUnsub();cUnsub=null}
+  centralOn=false;clearInterval(cTimer);if(cUnsub){cUnsub();cUnsub=null}if(tvUnsub){tvUnsub();tvUnsub=null}
   try{cLock&&cLock.release()}catch(e){}cLock=null;
   try{document.fullscreenElement&&document.exitFullscreen()}catch(e){}
   document.body.classList.remove('totem-on');$('central').hidden=true;
@@ -1348,6 +1355,9 @@ $('central').addEventListener('click',e=>{
   const r=e.target.closest('#cBody [data-cj]');if(!r)return;const id=r.dataset.cj;cOpen.has(id)?cOpen.delete(id):cOpen.add(id);renderCentral();
 });
 $("cLockBtn").onclick=cRelock;
+$('cExit').onclick=closeCentral;
+$('cFull').onclick=()=>{try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(e){}};
+if($('openCentral')){$('openCentral').hidden=!!(ctx&&ctx.totem);$('openCentral').onclick=openCentral}
 /* voltar pra Central (depois de abrir o editor por ela): botão e volta sozinho após 3 min parado */
 function backIdle(){clearTimeout(cBackIdle);if($('cBack').hidden)return;cBackIdle=setTimeout(()=>{if(!$('cBack').hidden&&!typing())backToCentral();else backIdle()},180000)}
 function backToCentral(){$('cBack').hidden=true;clearTimeout(cBackIdle);openCentral()}
