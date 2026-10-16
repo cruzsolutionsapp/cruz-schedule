@@ -459,9 +459,10 @@ function refresh(save=true){
   const ack=ackGet(),out=all.filter(o=>!(o[0]==='warn'&&ack.includes(o[1]))),nAck=all.length-out.length,nWarn=out.filter(o=>o[0]==='warn').length;
   $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('')
     +(nWarn&&!viewer?`<button class="linkbtn ackbtn" id="ackAlerts">✓ Já conferi os avisos amarelos</button>`:'')
-    +(P.escala?`<div class="histlinks"><button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button><button class="linkbtn histlink" id="openImp">📋 Colar mensagem do WhatsApp</button><button class="linkbtn histlink" id="openTv">📺 Ver a TV</button><button class="linkbtn histlink" id="pingTv">🔄 Atualizar a TV</button></div>`:'')
-    +(D.jobs.length>1?`<div class="histlinks">${D.jobs.every(isCollapsed)?'<button class="linkbtn histlink" id="expandAll">▾ Abrir todas</button>':'<button class="linkbtn histlink" id="collapseAll">▸ Recolher todas</button>'}${P.escala&&D.jobs.some(j=>!j.left)?'<button class="linkbtn histlink" id="leftAll">✅ Despachar todas</button>':''}</div>`:'')
+
     +(nAck?`<small class="ackinfo">${nAck} aviso${nAck>1?'s':''} já conferido${nAck>1?'s':''} · <button class="linkbtn" id="ackUndo">mostrar de novo</button></small>`:'');
+  $('toolsBar').innerHTML=''    +(P.escala?`<div class="histlinks"><button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button><button class="linkbtn histlink" id="openImp">📋 Colar mensagem do WhatsApp</button><button class="linkbtn histlink" id="openTv">📺 Ver a TV</button><button class="linkbtn histlink" id="pingTv">🔄 Atualizar a TV</button></div>`:'')
+    +(D.jobs.length>1?`<div class="histlinks">${D.jobs.every(isCollapsed)?'<button class="linkbtn histlink" id="expandAll">▾ Abrir todas</button>':'<button class="linkbtn histlink" id="collapseAll">▸ Recolher todas</button>'}${P.escala&&D.jobs.some(j=>!j.left)?'<button class="linkbtn histlink" id="leftAll">✅ Despachar todas</button>':''}</div>`:'');
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
   if(viewer)$('msgTitle').innerHTML='Escala <small>'+esc(dateBR())+'</small>';
   const a=assignedSet();const free=S.workers.filter(w=>!a.has(w.toLowerCase())&&!isOff(w));const offs=Object.keys(OFF);
@@ -635,7 +636,7 @@ $('stats').addEventListener('click',e=>{const b=e.target.closest('[data-go]');if
 const ackKey=()=>'ackAlerts-'+cur;
 function ackGet(){try{return JSON.parse(localStorage.getItem(ackKey())||'[]')}catch(e){return []}}
 function ackSet(a){try{a.length?localStorage.setItem(ackKey(),JSON.stringify(a)):localStorage.removeItem(ackKey())}catch(e){}}
-$('alerts').addEventListener('click',e=>{
+$('alerts').parentElement.addEventListener('click',e=>{
   if(e.target.id==='ackAlerts'){if(!confirm('Você já conferiu e corrigiu os avisos amarelos?\n\nEles somem e só voltam se aparecer algum aviso novo. Os vermelhos continuam até serem corrigidos.'))return;
     ackSet([...new Set([...ackGet(),...analyze().out.filter(o=>o[0]==='warn').map(o=>o[1])])]);refresh(false)}
   else if(e.target.id==='ackUndo'){ackSet([]);refresh(false)}
@@ -699,7 +700,7 @@ $('histDlg').addEventListener('click',e=>{
   if(!confirm(`Voltar a escala de ${dateBR(cur)} para como estava às ${new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase()}?\n\n(${h.n} obras · ${h.people} pessoas · ${h.left} despachadas)\n\nA versão de agora também fica guardada no histórico.`))return;
   D=normDay({date:cur,jobs:h.jobs||[],sent:h.sent||{}});saveDay();renderJobs();closeHist();toast('✓ Escala voltou pra versão das '+new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase());
 });
-$('alerts').addEventListener('click',e=>{if(e.target.id==='openTv'){const w=window.open(location.pathname+location.search+(ctx&&ctx.email==='demo@exemplo'?'#demo-central':'#central'),'_blank');if(!w)openCentral();return}
+$('alerts').parentElement.addEventListener('click',e=>{if(e.target.id==='openTv'){const w=window.open(location.pathname+location.search+(ctx&&ctx.email==='demo@exemplo'?'#demo-central':'#central'),'_blank');if(!w)openCentral();return}
   if(e.target.id==='pingTv'){db.doc('config/tvping').set({at:Date.now(),by:(ctx&&ctx.email)||''}).then(()=>toast('✓ Pedido enviado: a TV recarrega em alguns segundos'),err=>{console.error(err);toast('Não consegui avisar a TV ('+(err.code||'erro')+'). Atualize as regras do Firebase.')});return}
   if(e.target.id==='leftAll'&&P.escala){const pend=D.jobs.filter(j=>!j.left);if(!pend.length)return;
     const n=new Date(),def=n.getHours()+':'+pad(n.getMinutes());const t=prompt(`Marcar ${pend.length} obra${pend.length>1?'s':''} que ainda ${pend.length>1?'estão':'está'} aguardando como DESPACHADA${pend.length>1?'S':''}.\n\nQue horas saíram? (ex.: 6:00 ou 6:30am)`,def);if(t===null)return;

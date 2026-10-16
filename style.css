@@ -593,3 +593,7 @@ body.viewer{padding-bottom:24px}
 .impbox summary{cursor:pointer;font-weight:700}
 .impbox textarea{width:100%;margin:8px 0;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
 .impbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+/* barra de atalhos da escala: fica grudada embaixo do topo quando rola a lista */
+.toolsbar{position:sticky;top:var(--topH,0px);z-index:3;background:var(--bg);padding:6px 0 4px;margin-bottom:6px}
+.toolsbar:empty{display:none}
+.toolsbar .histlinks{row-gap:2px}
