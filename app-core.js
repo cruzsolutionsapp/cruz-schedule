@@ -35,9 +35,51 @@ window.addEventListener('online',()=>setStatus(inflight||Object.keys(pend).lengt
 window.addEventListener('offline',()=>setStatus('offline'));
 function queue(path,data){pend[path]=clone(data);setStatus('saving');clearTimeout(timers[path]);timers[path]=setTimeout(()=>flush(path),600)}
 function flushAll(){Object.keys(pend).forEach(p=>{clearTimeout(timers[p]);flush(p)})}
+/* ---------- Escala: cada aparelho só manda o que ELE mudou ----------
+   BASE[path] = versão de onde o aparelho partiu. Na hora de salvar, numa transação, pega a versão do servidor e aplica
+   só as diferenças (aparelho × BASE) por obra e por campo. Aparelho com versão velha que não mexeu = não apaga nada. */
+const BASE={};
+const nJobs=d=>(Array.isArray(d&&d.jobs)?normDay(d).jobs:[]).map(({calc,...r})=>r);
+function merge3(base,mine,srv){
+  if(!srv)return mine;
+  const bJ=nJobs(base),mJ=mine.jobs||[],sRaw=Array.isArray(srv.jobs)?srv.jobs:[],sJ=nJobs(srv);
+  const bM={},sM={},sR={};bJ.forEach(j=>bM[j.id]=j);sJ.forEach(j=>sM[j.id]=j);sRaw.forEach(j=>{if(j&&j.id)sR[j.id]=j});
+  const mIds=new Set(mJ.map(j=>j.id)),out=[];
+  mJ.forEach(m=>{const b=bM[m.id],sv=sM[m.id];
+    if(!b){out.push(m);return}                                   // obra que eu criei
+    const changed=stable(m)!==stable(b);
+    if(!sv){if(changed)out.push(m);return}                       // apagaram em outro aparelho: só volta se eu mexi nela
+    if(!changed){out.push(sR[m.id]);return}                      // não mexi: fica como está no servidor
+    const o=clone(sR[m.id]);new Set([...Object.keys(m),...Object.keys(b)]).forEach(k=>{if(stable(m[k])!==stable(b[k])){if(m[k]===undefined)delete o[k];else o[k]=clone(m[k])}});
+    out.push(o)});
+  sRaw.forEach(j=>{if(j&&j.id&&!mIds.has(j.id)&&!bM[j.id])out.push(j)});   // obra nova criada em outro aparelho
+  const sent=Object.assign({},srv.sent||{}),bS=(base&&base.sent)||{},mS=mine.sent||{};
+  new Set([...Object.keys(bS),...Object.keys(mS)]).forEach(k=>{if(stable(mS[k])!==stable(bS[k])){if(mS[k]===undefined)delete sent[k];else sent[k]=mS[k]}});
+  let drivers=srv.drivers||{};
+  if(stable(out)!==stable(sRaw)){drivers={};out.forEach(j=>{const n=jobDrivers({crew:j.crew||[]});if(n.length)drivers[j.id]=n})}
+  return {date:mine.date||srv.date,jobs:out,sent,drivers};
+}
+function keepPend(path,data){try{localStorage.setItem('pend:'+path,JSON.stringify({data,base:BASE[path]||null,at:Date.now()}))}catch(e){}}
+function dropPend(path){try{localStorage.removeItem('pend:'+path)}catch(e){}}
+function flushDay(path,data){
+  keepPend(path,data);
+  if(!navigator.onLine){setStatus('offline');setTimeout(()=>{if(!pend[path]){pend[path]=data;flush(path)}},8000);return}
+  inflight++;const base=BASE[path]||null;
+  db.doc(path).tx(srv=>{const m=merge3(base,data,srv);lastSent[path]=stable(m);return m}).then(m=>{
+    inflight--;BASE[path]=clone(m);dropPend(path);saveHist(m);
+    if(!inflight&&!Object.keys(pend).length)setStatus('ok');
+    if(path===dayPath(cur)&&!pend[path]&&stable(m)!==stable(data)&&stable({date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{}})===stable({date:data.date,jobs:data.jobs,sent:data.sent})){
+      D=normDay(m);if(typing())deferred=true;else{renderJobs();renderCentral()}}   // juntou com mudança de outro aparelho
+  },e=>{inflight--;console.error(e);
+    if(!navigator.onLine||e&&(e.code==='unavailable'||e.code==='failed-precondition')){setStatus('offline');setTimeout(()=>{if(!pend[path]){pend[path]=data;flush(path)}},8000)}
+    else{setStatus('err');toast('Não consegui salvar: '+(e&&e.code||'erro'))}});
+}
+window.addEventListener('online',()=>Object.keys(localStorage).filter(k=>k.startsWith('pend:days/')).forEach(k=>{const path=k.slice(5);if(pend[path])return;try{const o=JSON.parse(localStorage.getItem(k));if(o&&o.data&&path===dayPath(cur)){pend[path]=o.data;flush(path)}}catch(e){}}));
 function flush(path){
   if(!pend[path])return;
-  const data=pend[path];delete pend[path];lastSent[path]=stable(data);
+  const data=pend[path];delete pend[path];
+  if(path.startsWith('days/')&&db.doc(path).tx){flushDay(path,data);return}
+  lastSent[path]=stable(data);
   if(path.startsWith('days/')&&data&&data.date)saveHist(data);
   inflight++;
   db.doc(path).set(data).then(()=>{inflight--;if(!inflight&&!Object.keys(pend).length)setStatus('ok')},
@@ -54,7 +96,7 @@ function autoVeh(n,j){const fv=fixedVeh(n);if(!fv)return '';const other=D.jobs.f
   if(other){toast(`O ${fv} do ${n} já está em ${other===j?'outra pessoa desta obra':other.company||'outra obra'}`);return ''}return fv}
 const jobDrivers=j=>j.crew.filter(c=>isCompanyVeh(c.v)||isDriverName(c.name)).sort((a,b)=>(isDriverName(b.name)?1:0)-(isDriverName(a.name)?1:0)).map(c=>c.name);
 const driversMap=()=>{const m={};D.jobs.forEach(j=>{const n=jobDrivers(j);if(n.length)m[j.id]=n});return m};
-const saveDay=()=>(P.escala||P.telefones)&&!(navigator.onLine&&dayLoaded&&!dayFromServer&&(toast('Espere uns segundos: ainda conferindo a versão mais nova da escala…'),1))&&(lastDrivers=driversMap(),queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{},drivers:lastDrivers}));
+const saveDay=()=>(P.escala||P.telefones)&&(lastDrivers=driversMap(),queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{},drivers:lastDrivers}));
 const saveRoster=()=>(P.cadastro||P.escala)&&queue(ROSTER,S);
 const savePhones=()=>P.telefones&&queue(PHONES,{phones:PH});
 window.addEventListener('pagehide',flushAll);
@@ -89,6 +131,11 @@ function remoteRoster(snap){
   if(P.escala&&dayLoaded&&dayFromServer&&rosterFromServer&&D.jobs.length&&stable(lastDrivers||{})!==stable(driversMap()))saveDay();
 }
 let lastDrivers=null,dayFromServer=false,rosterFromServer=false;
+// mudança feita sem internet (ou app fechado antes de enviar): quando chega a versão do servidor, junta e envia
+function resumePend(path,snap){if(snap.metadata&&snap.metadata.fromCache)return;let o=null;try{o=JSON.parse(localStorage.getItem('pend:'+path)||'null')}catch(e){}
+  if(!o||!o.data||Date.now()-o.at>2*86400000){dropPend(path);return}
+  const base=o.base;inflight++;setStatus('saving');
+  db.doc(path).tx(srv=>{const m=merge3(base,o.data,srv);lastSent[path]=stable(m);return m}).then(m=>{inflight--;dropPend(path);BASE[path]=clone(m);setStatus('ok');if(path===dayPath(cur)&&!pend[path]){D=normDay(m);rerender()}toast('✓ Mudanças feitas sem internet foram enviadas')},e=>{inflight--;console.error(e)})}
 function remotePhones(snap){
   if(pend[PHONES])return;
   if(phonesLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
@@ -110,7 +157,8 @@ function watchDay(){
     if(dayLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
     const d=snap.exists?snap.data():null;
     if(dayLoaded&&d&&stable(d)===lastSent[path])return;
-    D=normDay(d);dayLoaded=true;rerender();renderTotem();
+    D=normDay(d);BASE[path]=d?clone(d):null;dayLoaded=true;rerender();renderTotem();
+    resumePend(path,snap);
     lastDrivers=d&&d.drivers||{};
     dayFromServer=!(snap.metadata&&snap.metadata.fromCache);
     if(P.escala&&d&&D.jobs.length&&dayFromServer&&rosterFromServer&&stable(d.drivers||{})!==stable(driversMap()))saveDay();   // dias salvos antes de existir a lista de motoristas (só com dados confirmados do servidor)
@@ -508,6 +556,14 @@ $('jobs').addEventListener('click',e=>{
 });
 
 /* copiar uma obra só pro dia seguinte (não mexe nas outras) */
+// acrescenta uma obra em outro dia sem apagar nada do que já está lá (transação)
+async function addJobTo(ds,nj){const path=dayPath(ds);
+  if(ds===cur&&dayLoaded){D.jobs.push(nj);saveDay();renderJobs();return}
+  const go=srv=>{const jobs=Array.isArray(srv&&srv.jobs)?srv.jobs.slice():[];if(jobs.some(x=>x.id===nj.id))return null;jobs.push(nj);
+    const drivers={};jobs.forEach(x=>{const n=jobDrivers({crew:x.crew||[]});if(n.length)drivers[x.id]=n});
+    return {date:ds,jobs,sent:(srv&&srv.sent)||{},drivers}};
+  if(db.doc(path).tx)return db.doc(path).tx(go);
+  const sn=await db.doc(path).get();const nd=go(sn.exists?sn.data():null);if(nd)await db.doc(path).set(nd)}
 // src = id da obra original (a cópia guarda de onde veio), pra saber se é a MESMA turma ou outra turma no mesmo endereço
 const srcOf=x=>x.src||x.id;
 async function copyJobToNext(j,btn,auto){
@@ -515,7 +571,7 @@ async function copyJobToNext(j,btn,auto){
   const nice=dateBR(next);btn.disabled=true;
   try{
     const snap=await db.doc(dayPath(next)).get();const day=snap.exists?snap.data():{date:next,jobs:[],sent:{}};
-    const jobs=Array.isArray(day.jobs)?day.jobs:[];
+    const jobs=Array.isArray(day.jobs)?day.jobs.slice():[];
     const key=x=>akey((x.company||'')+'|'+(x.address||''));
     if(jobs.some(x=>srcOf(x)===srcOf(j))){toast(`Essa turma da ${j.company||'obra'} já está em ${nice}`);return}
     const same=jobs.filter(x=>key(x)===key(j));
@@ -524,9 +580,8 @@ async function copyJobToNext(j,btn,auto){
       else if(!confirm(`Já tem ${same.length>1?same.length+' obras':'uma obra'} da ${j.company||'companhia'} nesse endereço em ${nice}.\n\nÉ outra turma (outro setor)? Toque OK pra copiar mesmo assim.`))return;
     }
     const {calc,prevAddr,left,...rest}=clone(j);
-    jobs.push(Object.assign(rest,{id:nid(),src:srcOf(j)}));
-    const drivers={};jobs.forEach(x=>{const n=jobDrivers({crew:x.crew||[]});if(n.length)drivers[x.id]=n});
-    await db.doc(dayPath(next)).set({date:next,jobs,sent:day.sent||{},drivers});
+    const nj=Object.assign(rest,{id:nid(),src:srcOf(j)});
+    await addJobTo(next,nj);
     toast(`✓ ${j.company||'Obra'} copiada pra ${nice}`);
   }catch(e){console.error(e);toast('Não consegui copiar ('+(e.code||'erro')+')')}
   finally{btn.disabled=false}
@@ -1422,9 +1477,7 @@ $('cdForm').addEventListener('submit',async e=>{e.preventDefault();if(!P.escala)
   try{
     for(const ds of dates){const j=newBooking(ds);
       if(ds===cur&&dayLoaded){D.jobs.push(j);saveDay();renderJobs();continue}
-      const snap=await db.doc(dayPath(ds)).get();const day=snap.exists?snap.data():{date:ds,jobs:[],sent:{}};
-      const jobs=Array.isArray(day.jobs)?day.jobs:[];jobs.push(j);
-      await db.doc(dayPath(ds)).set({date:ds,jobs,sent:day.sent||{},drivers:day.drivers||{}});
+      await addJobTo(ds,j);
     }
     const first=newBooking(dates[0]);if(first.address)rememberAddr(first);
     toast(dates.length>1?`✓ Agendado em ${dates.length} dias`:'✓ Agendado');

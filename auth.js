@@ -3,7 +3,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   sendEmailVerification, sendPasswordResetEmail, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, getDoc, getDocs,
-  setDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+  setDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyA-57toRP8Fwq3SyYcliJhYywu9CcnGCM4",
@@ -35,6 +35,8 @@ const dbw = {
     set: d => setDoc(r, d),
     get: async () => wrap(await getDoc(r)),
     delete: () => deleteDoc(r),
+    // lê a versão do servidor e grava o resultado de fn(atual) numa transação (ninguém grava no meio)
+    tx: fn => runTransaction(fs, async t => { const s = await t.get(r); const nd = fn(s.exists() ? s.data() : null); if (nd) t.set(r, nd); return nd; }),
     onSnapshot: (n, e) => onSnapshot(r, s => n(wrap(s)), e)
   }; },
   collection: p => qb(collection(fs, p))
@@ -170,6 +172,7 @@ function memDb(seed) {
   return {
     doc: p => ({ set: d => { store.set(p, clone(d)); notify(); return Promise.resolve(); }, get: () => Promise.resolve(snapDoc(p)),
       delete: () => { store.delete(p); notify(); return Promise.resolve(); },
+      tx: fn => { const nd = fn(clone(store.get(p)) || null); if (nd) { store.set(p, clone(nd)); notify(); } return Promise.resolve(nd); },
       onSnapshot: n => { const fire = () => n(snapDoc(p)); subs.add(fire); setTimeout(fire, 0); return () => subs.delete(fire); } }),
     collection: p => coll(p)
   };
