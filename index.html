@@ -312,6 +312,13 @@
     </form>
   </div>
 </div>
+<div class="modal" id="histDlg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="histTitle">
+    <div class="sheethead"><h2 id="histTitle">Versões</h2><button class="icon-btn" id="histClose" aria-label="Fechar">×</button></div>
+    <p class="hint">O app guarda uma foto da escala a cada 5 minutos de edição. Toque em "Voltar pra esta" pra desfazer uma bagunça.</p>
+    <div id="histList"></div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 </div>
 <textarea id="fallback" aria-hidden="true" style="position:fixed;left:-9999px;top:0"></textarea>

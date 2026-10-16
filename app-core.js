@@ -38,6 +38,7 @@ function flushAll(){Object.keys(pend).forEach(p=>{clearTimeout(timers[p]);flush(
 function flush(path){
   if(!pend[path])return;
   const data=pend[path];delete pend[path];lastSent[path]=stable(data);
+  if(path.startsWith('days/')&&data&&data.date)saveHist(data);
   inflight++;
   db.doc(path).set(data).then(()=>{inflight--;if(!inflight&&!Object.keys(pend).length)setStatus('ok')},
     e=>{inflight--;console.error(e);setStatus('err');toast('Não consegui salvar: '+(e&&e.code||'erro'))});
@@ -53,7 +54,7 @@ function autoVeh(n,j){const fv=fixedVeh(n);if(!fv)return '';const other=D.jobs.f
   if(other){toast(`O ${fv} do ${n} já está em ${other===j?'outra pessoa desta obra':other.company||'outra obra'}`);return ''}return fv}
 const jobDrivers=j=>j.crew.filter(c=>isCompanyVeh(c.v)||isDriverName(c.name)).sort((a,b)=>(isDriverName(b.name)?1:0)-(isDriverName(a.name)?1:0)).map(c=>c.name);
 const driversMap=()=>{const m={};D.jobs.forEach(j=>{const n=jobDrivers(j);if(n.length)m[j.id]=n});return m};
-const saveDay=()=>(P.escala||P.telefones)&&(lastDrivers=driversMap(),queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{},drivers:lastDrivers}));
+const saveDay=()=>(P.escala||P.telefones)&&!(navigator.onLine&&dayLoaded&&!dayFromServer&&(toast('Espere uns segundos: ainda conferindo a versão mais nova da escala…'),1))&&(lastDrivers=driversMap(),queue(dayPath(cur),{date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{},drivers:lastDrivers}));
 const saveRoster=()=>(P.cadastro||P.escala)&&queue(ROSTER,S);
 const savePhones=()=>P.telefones&&queue(PHONES,{phones:PH});
 window.addEventListener('pagehide',flushAll);
@@ -79,15 +80,15 @@ function remoteRoster(snap){
   if(rosterLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
   const d=snap.exists?snap.data():null;
   if(d&&stable(d)===lastSent[ROSTER]&&rosterLoaded)return;
-  S=normRoster(d);rosterLoaded=true;
+  S=normRoster(d);rosterLoaded=true;rosterFromServer=!(snap.metadata&&snap.metadata.fromCache);
   if(d&&d.phones&&typeof d.phones==='object'&&Object.keys(d.phones).length&&isAdmin){
     // telefones antigos ficavam no cadastro: passa pra um documento separado (só quem pode ver telefones lê)
     const go=()=>{if(!phonesLoaded)return setTimeout(go,500);PH=Object.assign({},d.phones,PH);savePhones();saveRoster()};go();
   }
   rerender();
-  if(P.escala&&dayLoaded&&D.jobs.length&&stable(lastDrivers||{})!==stable(driversMap()))saveDay();
+  if(P.escala&&dayLoaded&&dayFromServer&&rosterFromServer&&D.jobs.length&&stable(lastDrivers||{})!==stable(driversMap()))saveDay();
 }
-let lastDrivers=null;
+let lastDrivers=null,dayFromServer=false,rosterFromServer=false;
 function remotePhones(snap){
   if(pend[PHONES])return;
   if(phonesLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
@@ -111,7 +112,8 @@ function watchDay(){
     if(dayLoaded&&d&&stable(d)===lastSent[path])return;
     D=normDay(d);dayLoaded=true;rerender();renderTotem();
     lastDrivers=d&&d.drivers||{};
-    if(P.escala&&d&&D.jobs.length&&stable(d.drivers||{})!==stable(driversMap()))saveDay();   // dias salvos antes de existir a lista de motoristas
+    dayFromServer=!(snap.metadata&&snap.metadata.fromCache);
+    if(P.escala&&d&&D.jobs.length&&dayFromServer&&rosterFromServer&&stable(d.drivers||{})!==stable(driversMap()))saveDay();   // dias salvos antes de existir a lista de motoristas (só com dados confirmados do servidor)
   },e=>{console.error(e);setStatus('err')});
 }
 
@@ -409,6 +411,7 @@ function refresh(save=true){
   const ack=ackGet(),out=all.filter(o=>!(o[0]==='warn'&&ack.includes(o[1]))),nAck=all.length-out.length,nWarn=out.filter(o=>o[0]==='warn').length;
   $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('')
     +(nWarn&&!viewer?`<button class="linkbtn ackbtn" id="ackAlerts">✓ Já conferi os avisos amarelos</button>`:'')
+    +(P.escala?`<button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button>`:'')
     +(nAck?`<small class="ackinfo">${nAck} aviso${nAck>1?'s':''} já conferido${nAck>1?'s':''} · <button class="linkbtn" id="ackUndo">mostrar de novo</button></small>`:'');
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
   if(viewer)$('msgTitle').innerHTML='Escala <small>'+esc(dateBR())+'</small>';
@@ -581,6 +584,27 @@ $('alerts').addEventListener('click',e=>{
     ackSet([...new Set([...ackGet(),...analyze().out.filter(o=>o[0]==='warn').map(o=>o[1])])]);refresh(false)}
   else if(e.target.id==='ackUndo'){ackSet([]);refresh(false)}
 });
+/* ---------- Histórico da escala: dayhist/{data}_{HHMM} (uma foto a cada 5 min de edição) → "Versões anteriores" ---------- */
+function saveHist(data){try{const d=new Date(),b=pad(d.getHours())+pad(Math.floor(d.getMinutes()/5)*5);
+  const jobs=data.jobs||[];db.doc('dayhist/'+data.date+'_'+b).set({date:data.date,at:Date.now(),by:(ctx&&ctx.email)||'',jobs,sent:data.sent||{},drivers:data.drivers||{},
+    n:jobs.length,people:jobs.reduce((s,j)=>s+((j.crew||[]).length),0),left:jobs.filter(j=>j.left).length}).catch(e=>console.error('hist',e))}catch(e){}}
+async function openHist(){$('histDlg').hidden=false;document.body.classList.add('modal-open');$('histList').innerHTML='<p class="empty">Carregando…</p>';
+  try{const q=await db.collection('dayhist').where('date','==',cur).get();
+    const rows=q.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>b.at-a.at);
+    $('histTitle').textContent='Versões de '+dateBR(cur);
+    $('histList').innerHTML=rows.length?rows.map((h,i)=>`<div class="histrow"><div><b>${esc(new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase())}</b>${i===0?' <span class="wkbadge">mais recente</span>':''}
+      <small>${h.n} obra${h.n===1?'':'s'} · ${h.people} pessoa${h.people===1?'':'s'} · ${h.left} despachada${h.left===1?'':'s'} · por ${esc((h.by||'').split('@')[0]||'?')}</small></div>
+      ${i===0?'':`<button class="btn" data-hist="${esc(h.id)}">Voltar pra esta</button>`}</div>`).join(''):'<p class="empty">Ainda não tem versões guardadas deste dia. (O histórico começa a guardar a partir de agora.)</p>';
+    HIST=rows}catch(e){console.error(e);$('histList').innerHTML='<p class="empty">Não consegui abrir o histórico ('+esc(e.code||'erro')+'). Atualize as regras do Firebase.</p>'}}
+let HIST=[];
+function closeHist(){$('histDlg').hidden=true;document.body.classList.remove('modal-open')}
+$('histDlg').addEventListener('click',e=>{
+  if(e.target.id==='histDlg'||e.target.id==='histClose'){closeHist();return}
+  const b=e.target.closest('[data-hist]');if(!b||!P.escala)return;const h=HIST.find(x=>x.id===b.dataset.hist);if(!h)return;
+  if(!confirm(`Voltar a escala de ${dateBR(cur)} para como estava às ${new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase()}?\n\n(${h.n} obras · ${h.people} pessoas · ${h.left} despachadas)\n\nA versão de agora também fica guardada no histórico.`))return;
+  D=normDay({date:cur,jobs:h.jobs||[],sent:h.sent||{}});saveDay();renderJobs();closeHist();toast('✓ Escala voltou pra versão das '+new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase());
+});
+$('alerts').addEventListener('click',e=>{if(e.target.id==='openHist')openHist()});
 /* ---------- data ---------- */
 function setDate(d){flushAll();cur=d;$('date').value=d;openPick=null;confirmDel=null;confirmClear=false;$('clearDay').textContent='Limpar dia';watchDay()}
 $('date').onchange=e=>{if(e.target.value)setDate(e.target.value)};

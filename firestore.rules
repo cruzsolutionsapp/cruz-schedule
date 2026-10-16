@@ -123,6 +123,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Histórico da escala (fotos a cada 5 min): todos do app veem; quem edita escala grava; só admin apaga
+    match /dayhist/{id} {
+      allow read: if isMember();
+      allow create, update: if can('escala') && request.resource.data.date is string;
+      allow delete: if isAdmin();
+    }
+
     // Escala de cada dia
     match /days/{day} {
       allow read: if isMember();
