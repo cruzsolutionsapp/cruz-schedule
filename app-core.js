@@ -411,7 +411,7 @@ function refresh(save=true){
   const ack=ackGet(),out=all.filter(o=>!(o[0]==='warn'&&ack.includes(o[1]))),nAck=all.length-out.length,nWarn=out.filter(o=>o[0]==='warn').length;
   $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('')
     +(nWarn&&!viewer?`<button class="linkbtn ackbtn" id="ackAlerts">✓ Já conferi os avisos amarelos</button>`:'')
-    +(P.escala?`<button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button>`:'')
+    +(P.escala?`<div class="histlinks"><button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button><button class="linkbtn histlink" id="openImp">📋 Colar mensagem do WhatsApp</button></div>`:'')
     +(nAck?`<small class="ackinfo">${nAck} aviso${nAck>1?'s':''} já conferido${nAck>1?'s':''} · <button class="linkbtn" id="ackUndo">mostrar de novo</button></small>`:'');
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
   if(viewer)$('msgTitle').innerHTML='Escala <small>'+esc(dateBR())+'</small>';
@@ -597,6 +597,45 @@ async function openHist(){$('histDlg').hidden=false;document.body.classList.add(
       ${i===0?'':`<button class="btn" data-hist="${esc(h.id)}">Voltar pra esta</button>`}</div>`).join(''):'<p class="empty">Ainda não tem versões guardadas deste dia. (O histórico começa a guardar a partir de agora.)</p>';
     HIST=rows}catch(e){console.error(e);$('histList').innerHTML='<p class="empty">Não consegui abrir o histórico ('+esc(e.code||'erro')+'). Atualize as regras do Firebase.</p>'}}
 let HIST=[];
+/* ---------- Recriar a escala a partir da mensagem do WhatsApp (a mesma que o app gera) ---------- */
+function to24(t){const m=String(t||'').trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);if(!m)return '';let h=+m[1];const mi=+(m[2]||0);
+  if(m[3]==='pm'&&h<12)h+=12;if(m[3]==='am'&&h===12)h=0;return pad(h)+':'+pad(mi)}
+function parseMsg(txt){
+  const out=[];const blocks=String(txt||'').replace(/\r/g,'').split(/\n\s*_{2,}\s*(?=\n|$)/);
+  blocks.forEach(b=>{const lines=b.split('\n');const i=lines.findIndex(l=>/^\s*✅/.test(l));if(i<0)return;
+    const j={id:nid(),company:fmtCompany(lines[i].replace(/^\s*✅\s*/,'')),address:'',waiting:false,office:false,attire:'',shop:'',start:'',early:30,travel:null,autoShop:false,tk:'',need:0,note:'',allWeek:false,crew:[],left:0};
+    let gotAddr=false;
+    lines.slice(i+1).forEach(raw=>{const l=raw.trim();if(!l)return;
+      if(/^✓/.test(l)){let r=l.replace(/^✓\s*/,'');let v='';
+        const mv=r.match(/\s*(?:🛻|🚐|🚛|🚚|🚗)?\s*\((\w+)\)\s*$/u);
+        if(mv){v=mv[1];r=r.slice(0,mv.index)}else if(/\s*🚗\s*$/u.test(r)){v=OWN;r=r.replace(/\s*🚗\s*$/u,'')}
+        const name=fmtName(r.trim());if(name)j.crew.push({name,v});return}
+      if(/^⏰/.test(l)){const m=l.match(/start\s+([\d:]+\s*[ap]m)/i);if(m)j.start=to24(m[1]);return}
+      if(/^🔴/.test(l)){const r=l.replace(/^🔴\s*/,'');const m=r.match(/^([\d:]+\s*[ap]m)\s+no\s+shop/i);if(m)j.shop=to24(m[1]);else j.attire=r;return}
+      if(/^\(\s*all\s*week\s*\)$/i.test(l)){j.allWeek=true;return}
+      if(!gotAddr){gotAddr=true;if(/^\(\s*esperando\s*\)$/i.test(l)||/^\(endereço\?\)$/i.test(l))j.waiting=true;else j.address=fmtAddress(l);return}
+      if(/^\(.*\)$/.test(l)){j.note=l.replace(/^\(|\)$/g,'').trim();return}
+      j.note=(j.note?j.note+' ':'')+l});
+    if(j.address){const k=akey(j.address);if(S.travel[k]!=null){j.travel=S.travel[k];j.tk=k}}
+    j.need=j.crew.length;out.push(j)});
+  return out}
+let IMP=[];
+function impPreview(){IMP=parseMsg($('impMsg').value);
+  $('impOut').innerHTML=IMP.length?`<div class="alert ok">Achei <b>${IMP.length}</b> obra${IMP.length>1?'s':''} e <b>${IMP.reduce((s,j)=>s+j.crew.length,0)}</b> pessoas:</div>
+    <div class="cdjobs">${IMP.map(j=>`<div class="cdj"><div><b>${esc(j.company||'Obra')}</b>${j.allWeek?' <span class="wkbadge">All Week</span>':''}<small>${esc(j.waiting?'(Esperando)':j.address)} · shop ${esc(fmt(j.shop)||'—')} · start ${esc(fmt(j.start)||'—')}</small>
+      <small>${j.crew.map(c=>esc(c.name)+(c.v?' '+esc(vLabel(c.v)):'')).join(', ')||'sem equipe'}</small></div></div>`).join('')}</div>
+    <div class="impbtns"><button class="btn primary" id="impAdd">Adicionar só as obras que faltam</button><button class="btn" id="impReplace">Substituir a escala do dia por esta</button></div>`
+    :'<div class="alert warn">Não achei nenhuma obra. Cole a mensagem inteira, do jeito que foi pro grupo (cada obra começa com ✅).</div>'}
+function impApply(mode){if(!P.escala||!IMP.length)return;const key=x=>akey((x.company||'')+'|'+(x.waiting?'':x.address||''));
+  if(mode==='add'){const add=[],fill=[];IMP.forEach(j=>{const ex=D.jobs.find(x=>key(x)===key(j));if(!ex)add.push(j);else if(!ex.crew.length&&j.crew.length)fill.push([ex,j])});
+    if(!add.length&&!fill.length){toast('Todas as obras da mensagem já estão na escala');return}
+    if(!confirm(`Adicionar ${add.length} obra${add.length===1?'':'s'} que falta${add.length===1?'':'m'}${fill.length?` e completar a equipe de ${fill.length}`:''}?`))return;
+    add.forEach(j=>D.jobs.push(j));fill.forEach(([ex,j])=>{ex.crew=j.crew;ex.need=Math.max(ex.need||0,j.crew.length)});
+    saveDay();renderJobs();closeHist();toast(`✓ ${add.length} obra${add.length===1?'':'s'} adicionada${add.length===1?'':'s'}`);return}
+  if(!confirm(`Substituir a escala de ${dateBR(cur)} pelas ${IMP.length} obras da mensagem?\n\nObras que já estavam marcadas como despachadas continuam despachadas. A versão de agora fica guardada no histórico.`))return;
+  const old=D.jobs;D.jobs=IMP.map(j=>{const ex=old.find(x=>key(x)===key(j));return ex?Object.assign(j,{id:ex.id,left:ex.left||0,src:ex.src,travel:ex.travel!=null?ex.travel:j.travel,tk:ex.tk||j.tk}):j});
+  saveDay();renderJobs();closeHist();toast(`✓ Escala recriada com ${IMP.length} obras`)}
+
 function closeHist(){$('histDlg').hidden=true;document.body.classList.remove('modal-open')}
 $('histDlg').addEventListener('click',e=>{
   if(e.target.id==='histDlg'||e.target.id==='histClose'){closeHist();return}
@@ -604,7 +643,8 @@ $('histDlg').addEventListener('click',e=>{
   if(!confirm(`Voltar a escala de ${dateBR(cur)} para como estava às ${new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase()}?\n\n(${h.n} obras · ${h.people} pessoas · ${h.left} despachadas)\n\nA versão de agora também fica guardada no histórico.`))return;
   D=normDay({date:cur,jobs:h.jobs||[],sent:h.sent||{}});saveDay();renderJobs();closeHist();toast('✓ Escala voltou pra versão das '+new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase());
 });
-$('alerts').addEventListener('click',e=>{if(e.target.id==='openHist')openHist()});
+$('alerts').addEventListener('click',e=>{if(e.target.id==='openHist')openHist();if(e.target.id==='openImp'){openHist();const d=$('impBox');d.open=true;setTimeout(()=>$('impMsg').focus(),100)}});
+$('histDlg').addEventListener('click',e=>{if(e.target.id==='impPrev')impPreview();else if(e.target.id==='impAdd')impApply('add');else if(e.target.id==='impReplace')impApply('replace')});
 /* ---------- data ---------- */
 function setDate(d){flushAll();cur=d;$('date').value=d;openPick=null;confirmDel=null;confirmClear=false;$('clearDay').textContent='Limpar dia';watchDay()}
 $('date').onchange=e=>{if(e.target.value)setDate(e.target.value)};
