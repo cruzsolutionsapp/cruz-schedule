@@ -699,7 +699,7 @@ $('histDlg').addEventListener('click',e=>{
   if(!confirm(`Voltar a escala de ${dateBR(cur)} para como estava às ${new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase()}?\n\n(${h.n} obras · ${h.people} pessoas · ${h.left} despachadas)\n\nA versão de agora também fica guardada no histórico.`))return;
   D=normDay({date:cur,jobs:h.jobs||[],sent:h.sent||{}});saveDay();renderJobs();closeHist();toast('✓ Escala voltou pra versão das '+new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase());
 });
-$('alerts').addEventListener('click',e=>{if(e.target.id==='openTv'){openCentral();return}
+$('alerts').addEventListener('click',e=>{if(e.target.id==='openTv'){const w=window.open(location.pathname+location.search+(ctx&&ctx.email==='demo@exemplo'?'#demo-central':'#central'),'_blank');if(!w)openCentral();return}
   if(e.target.id==='pingTv'){db.doc('config/tvping').set({at:Date.now(),by:(ctx&&ctx.email)||''}).then(()=>toast('✓ Pedido enviado: a TV recarrega em alguns segundos'),err=>{console.error(err);toast('Não consegui avisar a TV ('+(err.code||'erro')+'). Atualize as regras do Firebase.')});return}
   if(e.target.id==='leftAll'&&P.escala){const pend=D.jobs.filter(j=>!j.left);if(!pend.length)return;
     const n=new Date(),def=n.getHours()+':'+pad(n.getMinutes());const t=prompt(`Marcar ${pend.length} obra${pend.length>1?'s':''} que ainda ${pend.length>1?'estão':'está'} aguardando como DESPACHADA${pend.length>1?'S':''}.\n\nQue horas saíram? (ex.: 6:00 ou 6:30am)`,def);if(t===null)return;

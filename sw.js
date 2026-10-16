@@ -1,7 +1,7 @@
 /* Service worker: deixa o app abrir sem internet.
    Arquivos do app: rede primeiro (pega a versão nova), cache se estiver offline.
    Bibliotecas do Firebase e fontes: cache primeiro (são versões fixas). */
-const VERSION = 'v87';
+const VERSION = 'v88';
 const SHELL = ['./', 'index.html', 'style.css', 'app-core.js', 'auth.js', 'manifest.webmanifest',
   'img/logo-mask.png', 'img/icon-192.png', 'img/icon-512.png', 'img/apple-touch-icon.png', 'img/favicon-32.png'];
 
