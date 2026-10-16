@@ -460,7 +460,7 @@ function refresh(save=true){
   $('alerts').innerHTML=(out.length?out:[['ok','Tudo certo: ninguém repetido e todas as obras com veículo.']]).map(([k,t])=>`<div class="alert ${k}">${esc(t)}</div>`).join('')
     +(nWarn&&!viewer?`<button class="linkbtn ackbtn" id="ackAlerts">✓ Já conferi os avisos amarelos</button>`:'')
     +(P.escala?`<div class="histlinks"><button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button><button class="linkbtn histlink" id="openImp">📋 Colar mensagem do WhatsApp</button></div>`:'')
-    +(D.jobs.length>1?`<div class="histlinks"><button class="linkbtn histlink" id="collapseAll">▸ Recolher todas</button><button class="linkbtn histlink" id="expandAll">▾ Abrir todas</button></div>`:'')
+    +(D.jobs.length>1?`<div class="histlinks"><button class="linkbtn histlink" id="collapseAll">▸ Recolher todas</button><button class="linkbtn histlink" id="expandAll">▾ Abrir todas</button>${P.escala&&D.jobs.some(j=>!j.left)?'<button class="linkbtn histlink" id="leftAll">✅ Despachar todas</button>':''}</div>`:'')
     +(nAck?`<small class="ackinfo">${nAck} aviso${nAck>1?'s':''} já conferido${nAck>1?'s':''} · <button class="linkbtn" id="ackUndo">mostrar de novo</button></small>`:'');
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
   if(viewer)$('msgTitle').innerHTML='Escala <small>'+esc(dateBR())+'</small>';
@@ -699,7 +699,11 @@ $('histDlg').addEventListener('click',e=>{
   if(!confirm(`Voltar a escala de ${dateBR(cur)} para como estava às ${new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase()}?\n\n(${h.n} obras · ${h.people} pessoas · ${h.left} despachadas)\n\nA versão de agora também fica guardada no histórico.`))return;
   D=normDay({date:cur,jobs:h.jobs||[],sent:h.sent||{}});saveDay();renderJobs();closeHist();toast('✓ Escala voltou pra versão das '+new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase());
 });
-$('alerts').addEventListener('click',e=>{if(e.target.id==='collapseAll'||e.target.id==='expandAll'){const open=e.target.id==='expandAll';D.jobs.forEach(j=>openLeft.set(j.id,open));renderJobs();return}if(e.target.id==='openHist')openHist();if(e.target.id==='openImp'){openHist();const d=$('impBox');d.open=true;setTimeout(()=>$('impMsg').focus(),100)}});
+$('alerts').addEventListener('click',e=>{if(e.target.id==='leftAll'&&P.escala){const pend=D.jobs.filter(j=>!j.left);if(!pend.length)return;
+    const n=new Date(),def=n.getHours()+':'+pad(n.getMinutes());const t=prompt(`Marcar ${pend.length} obra${pend.length>1?'s':''} que ainda ${pend.length>1?'estão':'está'} aguardando como DESPACHADA${pend.length>1?'S':''}.\n\nQue horas saíram? (ex.: 6:00 ou 6:30am)`,def);if(t===null)return;
+    const hh=to24(/[ap]m/i.test(t)?t:(+t.split(':')[0]<12&&+t.split(':')[0]>=5?t+'am':t))||to24(t);if(!hh){toast('Horário não entendido. Use por exemplo 6:00');return}
+    const ms=new Date(cur+'T'+hh+':00').getTime();pend.forEach(j=>{j.left=ms;openLeft.delete(j.id)});saveDay();pend.filter(j=>j.allWeek).forEach(j=>copyJobToNext(j,{},true));renderJobs();renderCentral();toast(`✓ ${pend.length} obra${pend.length>1?'s':''} despachada${pend.length>1?'s':''} às ${fmt(hh)}`);return}
+  if(e.target.id==='collapseAll'||e.target.id==='expandAll'){const open=e.target.id==='expandAll';D.jobs.forEach(j=>openLeft.set(j.id,open));renderJobs();return}if(e.target.id==='openHist')openHist();if(e.target.id==='openImp'){openHist();const d=$('impBox');d.open=true;setTimeout(()=>$('impMsg').focus(),100)}});
 $('histDlg').addEventListener('click',e=>{if(e.target.id==='impPrev')impPreview();else if(e.target.id==='impAdd')impApply('add');else if(e.target.id==='impReplace')impApply('replace')});
 /* ---------- data ---------- */
 function setDate(d){flushAll();cur=d;$('date').value=d;openPick=null;confirmDel=null;confirmClear=false;$('clearDay').textContent='Limpar dia';watchDay()}
