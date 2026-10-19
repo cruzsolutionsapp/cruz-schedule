@@ -1909,15 +1909,22 @@ function hrsDays(){const a=$('hrsFrom').value,b=$('hrsTo').value,o=[];let d=a;wh
 function hrsRender(){const rows=hrsRows(),qq=hKey($('hrsQ').value||''),all=hrsGroup(rows),ws=all.filter(w=>!qq||w.key.includes(qq));
   const days=hrsDays(),showDays=days.length<=7,drafts=hrsData.filter(t=>t.status==='draft').length,sheets=hrsData.filter(t=>t.status!=='draft'||$('hrsDrafts').checked).length;
   const tot=ws.reduce((s,w)=>s+w.min,0);
+  // valores: só com os valores abertos (senha)
+  const pay=!!PAY;let payTot=0,miss=[];
+  if(pay)ws.forEach(w=>{let v=0,rs=new Set(),m=false;w.rows.forEach(r=>{const rt=rateOn(w.key,r.date);if(rt==null){m=true;return}rs.add(rt);v+=r.min/60*rt});
+    w.pay=Math.round(v*100)/100;w.rates=[...rs];w.miss=m;if(m)miss.push(w.name);payTot+=w.pay});
+  payTot=Math.round(payTot*100)/100;
+  $('hrsPayLine').innerHTML=!FIN?'':pay?`💲 <b>Total a pagar: ${money(payTot)}</b>${miss.length?' · <span class="hrswarn">⚠️ sem valor cadastrado: '+esc(miss.join(', '))+' (fora do total)</span>':''} · <button class="linkbtn" id="hrsPayLock">🔒 Esconder valores</button>`
+    :`<span class="payunlock inl">🔒 Pra ver os valores em $: <input type="password" id="hrsPwd" placeholder="Sua senha" autocomplete="current-password" aria-label="Sua senha"><button class="btn" id="hrsPayOpen">Mostrar valores</button><span id="hrsPayMsg" class="hrswarn"></span></span>`;
   $('hrsInfo').innerHTML=`${sheets} folha${sheets===1?'':'s'} · ${ws.length} funcionário${ws.length===1?'':'s'} · <b>total ${hmTxt(tot)}</b> (${hDec(tot)} h)`+
     (drafts&&!$('hrsDrafts').checked?` · <span class="hrswarn">⚠️ ${drafts} rascunho${drafts>1?'s':''} ainda não enviado${drafts>1?'s':''} (fora da conta)</span>`:'');
   if(!ws.length){$('hrsTable').innerHTML='<tbody><tr><td class="empty">Nenhuma hora neste período.</td></tr></tbody>';return}
-  const head=`<thead><tr><th>Funcionário</th>${showDays?days.map(d=>`<th class="hd">${wdOf(d)}<br><small>${dmy(d)}</small></th>`).join(''):'<th class="hd">Dias</th>'}<th class="hd">Total</th><th class="hd">Decimal</th></tr></thead>`;
+  const head=`<thead><tr><th>Funcionário</th>${showDays?days.map(d=>`<th class="hd">${wdOf(d)}<br><small>${dmy(d)}</small></th>`).join(''):'<th class="hd">Dias</th>'}<th class="hd">Total</th><th class="hd">Decimal</th>${pay?'<th class="hd">Valor/h</th><th class="hd">A pagar</th>':''}</tr></thead>`;
   const body=ws.map(w=>{const open=hrsOpen[w.key];
-    const main=`<tr class="hrsw${open?' open':''}" data-hk="${esc(w.key)}"><td><button class="linkbtn hrsname" aria-expanded="${!!open}">${open?'▾':'▸'} ${esc(w.name)}</button></td>${showDays?days.map(d=>`<td class="hd">${w.days[d]?hmTxt(w.days[d]):'<span class="hrs0">—</span>'}</td>`).join(''):`<td class="hd">${Object.keys(w.days).length}</td>`}<td class="hd"><b>${hmTxt(w.min)}</b></td><td class="hd">${hDec(w.min)}</td></tr>`;
-    const det=open?`<tr class="hrsdet"><td colspan="${(showDays?days.length:1)+3}">${w.rows.map(r=>`<div class="hrsline"><span>${wdOf(r.date)} ${dmy(r.date)}</span><span><b>${esc(r.company)}</b>${r.location?' · '+esc(r.location):''}</span><span>${esc(fmt(r.in))}–${esc(fmt(r.out))}</span><span><b>${hmTxt(r.min)}</b></span><span class="tmb ${r.status}">${r.no?esc(r.no):tmStatusTxt[r.status]||''}</span></div>`).join('')}</td></tr>`:'';
+    const main=`<tr class="hrsw${open?' open':''}" data-hk="${esc(w.key)}"><td><button class="linkbtn hrsname" aria-expanded="${!!open}">${open?'▾':'▸'} ${esc(w.name)}</button></td>${showDays?days.map(d=>`<td class="hd">${w.days[d]?hmTxt(w.days[d]):'<span class="hrs0">—</span>'}</td>`).join(''):`<td class="hd">${Object.keys(w.days).length}</td>`}<td class="hd"><b>${hmTxt(w.min)}</b></td><td class="hd">${hDec(w.min)}</td>${pay?`<td class="hd">${w.rates.length?w.rates.map(money).join(' / '):''}${w.miss?' <span class="paymiss">sem valor</span>':''}</td><td class="hd"><b>${w.rates.length?money(w.pay):'—'}</b></td>`:''}</tr>`;
+    const det=open?`<tr class="hrsdet"><td colspan="${(showDays?days.length:1)+3+(pay?2:0)}">${w.rows.map(r=>`<div class="hrsline"><span>${wdOf(r.date)} ${dmy(r.date)}</span><span><b>${esc(r.company)}</b>${r.location?' · '+esc(r.location):''}</span><span>${esc(fmt(r.in))}–${esc(fmt(r.out))}</span><span><b>${hmTxt(r.min)}</b>${pay&&rateOn(w.key,r.date)!=null?' · '+money(r.min/60*rateOn(w.key,r.date)):''}</span><span class="tmb ${r.status}">${r.no?esc(r.no):tmStatusTxt[r.status]||''}</span></div>`).join('')}</td></tr>`:'';
     return main+det}).join('');
-  const foot=`<tfoot><tr><td><b>Total</b></td>${showDays?days.map(d=>{const m=ws.reduce((s,w)=>s+(w.days[d]||0),0);return `<td class="hd">${m?hmTxt(m):''}</td>`}).join(''):'<td></td>'}<td class="hd"><b>${hmTxt(tot)}</b></td><td class="hd">${hDec(tot)}</td></tr></tfoot>`;
+  const foot=`<tfoot><tr><td><b>Total</b></td>${showDays?days.map(d=>{const m=ws.reduce((s,w)=>s+(w.days[d]||0),0);return `<td class="hd">${m?hmTxt(m):''}</td>`}).join(''):'<td></td>'}<td class="hd"><b>${hmTxt(tot)}</b></td><td class="hd">${hDec(tot)}</td>${pay?`<td></td><td class="hd"><b>${money(payTot)}</b></td>`:''}</tr></tfoot>`;
   $('hrsTable').innerHTML=head+'<tbody>'+body+'</tbody>'+foot}
 async function hrsXls(){const rows=hrsRows(),qq=hKey($('hrsQ').value||'');const ws=hrsGroup(rows).filter(w=>!qq||w.key.includes(qq));
   if(!ws.length){toast('Nenhuma hora pra baixar neste período');return}
@@ -1925,12 +1932,13 @@ async function hrsXls(){const rows=hrsRows(),qq=hKey($('hrsQ').value||'');const 
   const r2=m=>Math.round(m/60*100)/100;
   const res=[['Horas por funcionário · '+dmy(a)+'/'+a.slice(0,4)+' a '+dmy(b)+'/'+b.slice(0,4)+' (30 min de almoço já descontados)'],[],
     ['Funcionário',...days.map(d=>wdOf(d)+' '+dmy(d)),'Total (horas)','Total (h:mm)','Dias trabalhados']];
-  ws.forEach(w=>res.push([w.name,...days.map(d=>w.days[d]?r2(w.days[d]):''),r2(w.min),hmTxt(w.min),Object.keys(w.days).length]));
-  const tot=ws.reduce((s,w)=>s+w.min,0);res.push(['TOTAL',...days.map(d=>{const m=ws.reduce((s,w)=>s+(w.days[d]||0),0);return m?r2(m):''}),r2(tot),hmTxt(tot),'']);
-  const det=[['Data','Dia','Funcionário','Companhia (Bill To)','Local','Job #','T&M nº','Entrada','Saída','Almoço (min)','Horas','Horas (h:mm)','Status','Invoice #']];
-  ws.forEach(w=>w.rows.forEach(r=>det.push([r.date.split('-').reverse().join('/'),wdOf(r.date),r.name,r.company,r.location,r.jobNo,r.no,fmt(r.in),fmt(r.out),30,r2(r.min),hmTxt(r.min),tmStatusTxt[r.status]||r.status,r.invoice])));
-  const blob=makeXlsx([{name:'Resumo',rows:res,bold:[0,2,res.length-1],cols:[26,...days.map(()=>10),13,12,15]},
-    {name:'Detalhe',rows:det,bold:[0],cols:[11,5,24,26,30,9,9,9,9,12,8,12,10,12]}]);
+  const pay=!!PAY;if(pay){res[2].push('Valor/h (US$)','A pagar (US$)');ws.forEach(w=>{let v=0,rs=new Set();w.rows.forEach(r=>{const rt=rateOn(w.key,r.date);if(rt!=null){rs.add(rt);v+=r.min/60*rt}});w.pay=Math.round(v*100)/100;w.rates=[...rs]})}
+  ws.forEach(w=>res.push([w.name,...days.map(d=>w.days[d]?r2(w.days[d]):''),r2(w.min),hmTxt(w.min),Object.keys(w.days).length,...(pay?[w.rates.length===1?w.rates[0]:w.rates.length?w.rates.join(' / '):'sem valor',w.pay]:[])]));
+  const tot=ws.reduce((s,w)=>s+w.min,0);res.push(['TOTAL',...days.map(d=>{const m=ws.reduce((s,w)=>s+(w.days[d]||0),0);return m?r2(m):''}),r2(tot),hmTxt(tot),'',...(pay?['',Math.round(ws.reduce((s,w)=>s+w.pay,0)*100)/100]:[])]);
+  const det=[['Data','Dia','Funcionário','Companhia (Bill To)','Local','Job #','T&M nº','Entrada','Saída','Almoço (min)','Horas','Horas (h:mm)','Status','Invoice #',...(pay?['Valor/h (US$)','Valor (US$)']:[])]];
+  ws.forEach(w=>w.rows.forEach(r=>det.push([r.date.split('-').reverse().join('/'),wdOf(r.date),r.name,r.company,r.location,r.jobNo,r.no,fmt(r.in),fmt(r.out),30,r2(r.min),hmTxt(r.min),tmStatusTxt[r.status]||r.status,r.invoice,...(pay?(()=>{const rt=rateOn(w.key,r.date);return rt==null?['sem valor','']:[rt,Math.round(r.min/60*rt*100)/100]})():[])])));
+  const blob=makeXlsx([{name:'Resumo',rows:res,bold:[0,2,res.length-1],cols:[26,...days.map(()=>10),13,12,15,14,14]},
+    {name:'Detalhe',rows:det,bold:[0],cols:[11,5,24,26,30,9,9,9,9,12,8,12,10,12,13,12]}]);
   const u=URL.createObjectURL(blob),el=document.createElement('a');el.href=u;el.download='horas_'+a+'_a_'+b+'.xlsx';document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
   toast('✓ Excel baixado')}
 /* gerador de .xlsx próprio (sem biblioteca de fora): zip sem compressão + XML da planilha */
@@ -1962,7 +1970,53 @@ if($('tmSubs')){$('tmSubs').hidden=!FIN;$('tmSubDay').onclick=()=>tmSub('day');$
   $('hrsNext').onclick=()=>hrsSetWeek(dAdd(monOf($('hrsFrom').value||iso(new Date())),7));
   $('hrsThis').onclick=()=>hrsSetWeek(monOf(iso(new Date())));
   $('hrsFrom').onchange=$('hrsTo').onchange=hrsLoad;$('hrsDrafts').onchange=hrsRender;$('hrsQ').oninput=hrsRender;$('hrsXls').onclick=hrsXls;
+  $('hrsPayLine').addEventListener('click',e=>{if(e.target.id==='hrsPayOpen')payUnlock($('hrsPwd').value,$('hrsPayMsg'));if(e.target.id==='hrsPayLock')payLockNow()});
+  $('hrsPayLine').addEventListener('keydown',e=>{if(e.target.id==='hrsPwd'&&e.key==='Enter')payUnlock($('hrsPwd').value,$('hrsPayMsg'))});
   $('hrsTable').addEventListener('click',e=>{const tr=e.target.closest('tr[data-hk]');if(!tr)return;hrsOpen[tr.dataset.hk]=!hrsOpen[tr.dataset.hk];hrsRender()})}
+/* ---- 💲 Valores por hora (Cadastro, trancado com a senha do login; só admin/Financeiro) ----
+   pay/rates: {rates:{chave:[{from:'AAAA-MM-DD',rate,by,at}]}, names:{chave:'Nome'}} · paylog/{auto}: quem abriu/mudou */
+let PAY=null,payUntil=0,payT=null,payEdit=null;
+const money=v=>'$'+(Math.round(v*100)/100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+function rateOn(key,ds){const L=(PAY&&PAY.rates&&PAY.rates[key])||[];let r=null;L.slice().sort((a,b)=>a.from<b.from?-1:1).forEach(e=>{if(e.from<=ds)r=e.rate});return r}
+function payNextOf(key,ds){const L=((PAY&&PAY.rates&&PAY.rates[key])||[]).filter(e=>e.from>ds).sort((a,b)=>a.from<b.from?-1:1);return L[0]||null}
+function paySince(key,ds){const L=((PAY&&PAY.rates&&PAY.rates[key])||[]).filter(e=>e.from<=ds).sort((a,b)=>a.from<b.from?-1:1);return L.length?L[L.length-1]:null}
+function payLog(what,extra){try{db.doc('paylog/'+Date.now()+'_'+Math.random().toString(36).slice(2,7)).set(Object.assign({by:(ctx&&ctx.email)||'',at:Date.now(),what},extra||{})).catch(()=>{})}catch(e){}}
+async function payUnlock(pwd,msgEl){if(!FIN)return false;if(!pwd){msgEl.textContent='Digite sua senha.';return false}
+  if(!(ctx&&ctx.reauth)){msgEl.textContent='Não consegui conferir a senha neste aparelho.';return false}
+  msgEl.textContent='Conferindo…';
+  try{await ctx.reauth(pwd)}catch(e){const c=(e&&e.code)||'';msgEl.textContent=/wrong-password|invalid-credential|invalid-login/.test(c)?'Senha errada.':/too-many/.test(c)?'Muitas tentativas. Espere uns minutos.':'Não consegui conferir a senha ('+(c||'erro')+'). Precisa de internet.';return false}
+  try{const d=await db.doc('pay/rates').get();PAY=(d.exists&&d.data())||{rates:{},names:{}};PAY.rates=PAY.rates||{};PAY.names=PAY.names||{}}
+  catch(e){console.error(e);msgEl.textContent='Não consegui abrir os valores ('+(e.code||'erro')+'). As regras novas do Firebase foram publicadas?';return false}
+  msgEl.textContent='';payUntil=Date.now()+10*60000;clearTimeout(payT);payT=setTimeout(payLockNow,10*60000);payLog('abriu os valores');
+  payRender();if(!$('tmPaneHrs').hidden)hrsRender();return true}
+function payLockNow(){PAY=null;payUntil=0;clearTimeout(payT);$('payPwd').value='';if($('hrsPwd'))$('hrsPwd').value='';payDlgClose();payRender();if($('tmPaneHrs')&&!$('tmPaneHrs').hidden)hrsRender()}
+function payRender(){const pn=$('payPanel');if(!pn)return;pn.hidden=!FIN;if(!FIN)return;const open=!!PAY;$('payLocked').hidden=open;$('payBody').hidden=!open;if(!open)return;
+  $('payUntil').textContent=new Date(payUntil).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const today=iso(new Date()),q=hKey($('payQ').value||'');
+  const keys=new Map();S.workers.forEach(w=>keys.set(hKey(w),fmtName(w)));Object.keys(PAY.rates).forEach(k=>{if(!keys.has(k))keys.set(k,(PAY.names&&PAY.names[k])||k)});
+  const list=[...keys.entries()].filter(([k,n])=>!q||k.includes(q)).sort((a,b)=>a[1].localeCompare(b[1],'pt'));
+  $('payList').innerHTML=list.length?list.map(([k,n])=>{const cur=paySince(k,today),nx=payNextOf(k,today);
+    return `<div class="payrow"><div><b>${esc(n)}</b><small>${cur?money(cur.rate)+'/h <span class="paysince">desde '+esc(cur.from.split('-').reverse().join('/'))+'</span>':'<span class="paymiss">sem valor</span>'}${nx?' · <span class="paynext">'+money(nx.rate)+'/h a partir de '+esc(nx.from.split('-').reverse().join('/'))+'</span>':''}</small></div>
+      <button class="btn" data-payk="${esc(k)}" data-payn="${esc(n)}">${cur||nx?'Alterar':'Colocar valor'}</button></div>`}).join(''):'<p class="empty">Nenhum funcionário.</p>'}
+function payDlgOpen(k,n){if(!PAY)return;payEdit={k,n};const today=iso(new Date());$('payDlgName').textContent=n;
+  const cur=paySince(k,today);$('payRate').value='';$('payFrom').value=cur?dAdd(monOf(today),7):monOf(today);
+  $('payDlgHint').textContent=cur?'Valor atual: '+money(cur.rate)+'/h. O novo entra na próxima segunda ('+dmy($('payFrom').value)+'), a não ser que você mude a data.':'Primeiro valor: já vale desde a segunda desta semana ('+dmy($('payFrom').value)+'). Mude a data se precisar.';
+  const L=((PAY.rates[k])||[]).slice().sort((a,b)=>a.from<b.from?1:-1);
+  $('payHist').innerHTML=L.length?'<h4 class="phsub">Histórico</h4>'+L.map(e=>`<div class="payh"><span>${esc(e.from.split('-').reverse().join('/'))}</span><b>${money(e.rate)}/h</b><small>${esc(e.by||'')} · ${e.at?esc(new Date(e.at).toLocaleDateString('pt-BR')):''}</small></div>`).join(''):'';
+  $('payDlg').hidden=false;setTimeout(()=>$('payRate').focus(),50)}
+function payDlgClose(){payEdit=null;$('payDlg').hidden=true}
+async function paySave(){if(!payEdit||!PAY)return;const rate=Math.round(parseFloat(String($('payRate').value).replace(',','.'))*100)/100,from=$('payFrom').value;
+  if(!(rate>0)||rate>1000){toast('Coloque um valor válido (ex.: 25.00)');return}if(!/^\d{4}-\d\d-\d\d$/.test(from)){toast('Escolha a data');return}
+  if(Date.now()>payUntil){toast('Tempo esgotado: abra os valores de novo');payLockNow();return}
+  const k=payEdit.k,n=payEdit.n,by=(ctx&&ctx.email)||'',at=Date.now();
+  if(!confirm(`${n}: ${money(rate)}/h a partir de ${from.split('-').reverse().join('/')}?`))return;
+  try{const res=await db.doc('pay/rates').tx(d=>{const o=d||{rates:{},names:{}};o.rates=o.rates||{};o.names=o.names||{};
+      const L=(o.rates[k]||[]).filter(e=>e.from!==from);L.push({from,rate,by,at});o.rates[k]=L.sort((a,b)=>a.from<b.from?-1:1);o.names[k]=n;return o});
+    PAY=res;payLog('mudou valor',{name:n,rate,from});payDlgClose();payRender();if(!$('tmPaneHrs').hidden)hrsRender();toast('✓ Valor salvo')}
+  catch(e){console.error(e);toast('Não consegui salvar ('+(e.code||'erro')+')')}}
+if($('payPanel')){payRender();$('payOpen').onclick=()=>payUnlock($('payPwd').value,$('payMsg'));$('payPwd').addEventListener('keydown',e=>{if(e.key==='Enter')$('payOpen').click()});
+  $('payLock').onclick=payLockNow;$('payQ').oninput=payRender;$('payList').addEventListener('click',e=>{const b=e.target.closest('[data-payk]');if(b)payDlgOpen(b.dataset.payk,b.dataset.payn)});
+  $('payDlgClose').onclick=payDlgClose;$('paySave').onclick=paySave;$('payDlg').addEventListener('click',e=>{if(e.target.id==='payDlg')payDlgClose()})}
 if(viewer)tab('day');
 $('date').value=cur;showWeekday();
 S=normRoster(null);

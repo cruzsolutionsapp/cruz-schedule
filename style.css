@@ -674,3 +674,13 @@ body.viewer{padding-bottom:24px}
 .hrsw.open td{background:var(--sunk)}.hrsdet td{background:var(--sunk);padding:4px 8px 10px}
 .hrsline{display:grid;grid-template-columns:80px minmax(0,1fr) 140px 60px auto;gap:8px;align-items:center;padding:4px 0;font-size:13px;border-top:1px dashed var(--line)}
 @media (max-width:560px){.hrsline{grid-template-columns:70px minmax(0,1fr) 60px;}.hrsline span:nth-child(3),.hrsline span:nth-child(5){display:none}}
+/* 💲 valores por hora */
+.payunlock{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.payunlock input{font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:0;flex:1;max-width:220px}
+.payunlock.inl{display:inline-flex}
+.payq{width:100%;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);margin:6px 0}
+.paylist{display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto}
+.payrow{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.payrow small{display:block;color:var(--muted);margin-top:2px}
+.paysince{color:var(--muted)}.paynext{color:var(--ok);font-weight:600}.paymiss{color:var(--warn);font-weight:700}
+.payh{display:flex;gap:10px;align-items:baseline;font-size:13px;padding:3px 0;border-top:1px dashed var(--line)}.payh small{color:var(--muted)}

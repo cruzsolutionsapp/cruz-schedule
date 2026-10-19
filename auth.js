@@ -218,6 +218,7 @@ function demoSeed() {
     ...nextDays(),
     ...(() => { const d = new Date(); d.setDate(d.getDate() + 1); const ds = iso(d); return { ['dayoff/' + ds]: { date: ds, people: { 'João Pereira': { by: 'demo', at: 0 } } } }; })(),
     ['days/' + yest]: { date: yest, jobs: [jobs[0]], sent: {}, drivers: { d1: ['Carlos Lima'] } },
+    ['pay/rates']: (() => { const d = new Date(); d.setDate(d.getDate() - 60); const old = iso(d); return { names: {}, rates: { 'carlos lima': [{ from: old, rate: 32, by: 'demo', at: 0 }], 'joao pereira': [{ from: old, rate: 25, by: 'demo', at: 0 }], 'marcos souza': [{ from: old, rate: 24, by: 'demo', at: 0 }], 'andre costa': [{ from: old, rate: 30, by: 'demo', at: 0 }], 'felipe rocha': [{ from: old, rate: 23.5, by: 'demo', at: 0 }], 'lucas martins': [{ from: old, rate: 24, by: 'demo', at: 0 }] } }; })(),
     ['attendance/' + today + '_d1']: { date: today, jobId: 'd1', company: 'ABC Restoration', driver: 'Carlos Lima', by: 'demo', people: { 'Carlos Lima': 'in', 'João Pereira': 'in', 'Marcos Souza': 'in', 'Rafael Alves': 'out' }, times: { 'Carlos Lima': t('06:02'), 'João Pereira': t('06:09'), 'Marcos Souza': t('06:21') }, atMs: t('06:25') }
   };
 }

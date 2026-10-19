@@ -153,6 +153,7 @@
           <button class="btn primary" id="hrsXls">⬇️ Baixar Excel</button>
         </div>
         <p class="hint" id="hrsInfo"></p>
+        <p class="hint" id="hrsPayLine"></p>
         <div class="tmtablewrap"><table class="hrstable" id="hrsTable"></table></div>
         <p class="hint">Horas já com os 30 min de almoço descontados. Toque no nome pra ver dia a dia, obra por obra.</p>
       </div>
@@ -231,6 +232,20 @@
         <p class="hint">Toque em <b>🔑 Motorista</b> pra marcar quem é motorista/responsável: quando estiver escalado numa obra, ele vê o painel da obra dele (presença e fotos), mesmo indo de carro próprio. Gente extra do dia não precisa estar aqui: dá pra digitar o nome direto na obra.</p>
       </div>
       <div class="side">
+        <div class="panel paypanel" id="payPanel" hidden>
+          <h2>💲 Valores por hora 🔒</h2>
+          <div id="payLocked">
+            <p class="hint">Quanto cada funcionário ganha por hora. Só admin e Financeiro. Pra ver ou mudar, confirme com a senha do seu login (fica aberto 10 min).</p>
+            <div class="payunlock"><input type="password" id="payPwd" placeholder="Sua senha" autocomplete="current-password" aria-label="Sua senha"><button class="btn primary" id="payOpen">🔓 Abrir</button></div>
+            <p class="hint" id="payMsg" style="color:var(--bad)"></p>
+          </div>
+          <div id="payBody" hidden>
+            <p class="hint">Aberto até <b id="payUntil"></b> · <button class="linkbtn" id="payLock">🔒 Trancar agora</button></p>
+            <input type="search" id="payQ" placeholder="Filtrar por nome" aria-label="Filtrar por nome" autocomplete="off" class="payq">
+            <div id="payList" class="paylist"></div>
+            <p class="hint">Aumento entra na <b>próxima semana</b> (segunda-feira), a não ser que você escolha outra data. As semanas que já passaram continuam com o valor antigo. Tudo fica registrado (quem mudou e quando).</p>
+          </div>
+        </div>
         <div class="panel">
           <h2>Acesso</h2>
           <div class="lrow"><span class="wname" id="who"></span><button class="btn" id="logout">Sair</button></div>
@@ -391,6 +406,17 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="tmGoneTitle">
     <div class="sheethead"><h2 id="tmGoneTitle">🗑 T&amp;M excluídas</h2><button class="icon-btn" id="tmGoneClose" aria-label="Fechar">×</button></div>
     <div id="tmGoneList" class="tmlist"></div>
+  </div>
+</div>
+<div class="modal" id="payDlg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="payDlgTitle" style="max-width:440px">
+    <div class="sheethead"><h2 id="payDlgTitle">💲 Valor por hora</h2><button class="icon-btn" id="payDlgClose" aria-label="Fechar">×</button></div>
+    <p><b id="payDlgName"></b></p>
+    <div class="tmgrid"><label class="f">Novo valor por hora (US$)<input type="number" id="payRate" min="0" step="0.01" inputmode="decimal" placeholder="Ex.: 25.00"></label>
+      <label class="f">Vale a partir de<input type="date" id="payFrom"></label></div>
+    <p class="hint" id="payDlgHint"></p>
+    <div id="payHist"></div>
+    <button class="btn primary" id="paySave">Salvar valor</button>
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>

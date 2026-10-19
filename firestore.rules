@@ -65,6 +65,10 @@ service cloud.firestore {
         && (!('log' in d) || (d.log is list && d.log.size() <= 200))
         && (!('sign' in d) || d.sign == null || (d.sign is map && (!('img' in d.sign) || d.sign.img == null || (d.sign.img is string && d.sign.img.size() < 300000))));
     }
+    // digitou a senha de novo há pouco (s segundos)
+    function recent(s) {
+      return request.time < timestamp.value((request.auth.token.auth_time + s) * 1000);
+    }
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
@@ -194,6 +198,17 @@ service cloud.firestore {
       allow read: if isMember();
       allow create: if isMember() && (can('escala') || myWorker() != '') && request.resource.data.keys().hasOnly(['next']) && request.resource.data.next == 2;
       allow update: if isMember() && (can('escala') || myWorker() != '') && request.resource.data.keys().hasOnly(['next']) && request.resource.data.next == resource.data.next + 1;
+    }
+
+    // 💲 Valores por hora dos funcionários: só admin/Financeiro e só logo depois de digitar a senha (10 min)
+    match /pay/{doc} {
+      allow read, write: if fin() && recent(600);
+    }
+    // Registro de quem abriu/mudou os valores (ninguém altera nem apaga)
+    match /paylog/{id} {
+      allow create: if fin() && request.resource.data.by == me();
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
 
     // Escala de cada dia
