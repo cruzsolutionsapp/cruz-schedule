@@ -131,6 +131,7 @@
       <h2>🧾 Time &amp; Material · <span id="tmDay"></span></h2>
       <p class="hint">Folha de horas digital de cada obra. O motorista preenche no celular (painel "Minha obra hoje"); aqui o escritório confere, completa e baixa o PDF. Troque o dia na data lá em cima.</p>
       <div id="tmList" class="tmlist"></div>
+      <button class="linkbtn" id="tmGoneBtn" hidden>🗑 Ver T&amp;M excluídas (quem, quando e por quê)</button>
     </div>
   </section>
 
@@ -349,6 +350,23 @@
   <div class="sheet tmsheet" role="dialog" aria-modal="true" aria-label="Time and Material">
     <div class="sheethead"><h2>🧾 Time &amp; Material</h2><button class="icon-btn" id="tmClose" aria-label="Fechar">×</button></div>
     <div id="tmBody"></div>
+  </div>
+</div>
+<div class="modal" id="tmDelDlg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="tmDelTitle" style="max-width:440px">
+    <div class="sheethead"><h2 id="tmDelTitle">🗑 Excluir T&amp;M</h2><button class="icon-btn" id="tmDelClose" aria-label="Fechar">×</button></div>
+    <p id="tmDelInfo"></p>
+    <label class="f">Motivo<input id="tmDelWhy" maxlength="200" placeholder="Ex.: feita em duplicidade"></label>
+    <label class="f">Sua senha de administrador<input type="password" id="tmDelPwd" autocomplete="current-password"></label>
+    <p class="hint">Fica registrado quem excluiu, quando e o motivo (com uma cópia da folha). O número dela não é usado de novo.</p>
+    <p class="hint" id="tmDelMsg" style="color:var(--bad)"></p>
+    <button class="btn danger" id="tmDelGo">Excluir de vez</button>
+  </div>
+</div>
+<div class="modal" id="tmGoneDlg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="tmGoneTitle">
+    <div class="sheethead"><h2 id="tmGoneTitle">🗑 T&amp;M excluídas</h2><button class="icon-btn" id="tmGoneClose" aria-label="Fechar">×</button></div>
+    <div id="tmGoneList" class="tmlist"></div>
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>

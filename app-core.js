@@ -1724,7 +1724,8 @@ function tmRender(){if(!tmCur)return;const t=tmCur.data,ed=tmCanEdit(t);
       <button class="btn" id="tmInvSave">${t.status==='invoiced'?'Salvar Invoice #':'Salvar e marcar como faturada'}</button></div>`:''}
     <div class="tmbtns">${ed?`<button class="btn" id="tmSaveBtn">Salvar rascunho</button><button class="btn primary" id="tmSend">✍️ Enviar T&amp;M</button>`:''}
       ${t.status!=='draft'?`<button class="btn" id="tmPdf">📄 Baixar PDF</button>`:''}
-      ${isAdmin&&t.status!=='draft'?`<button class="linkbtn" id="tmUnlock">Destrancar pra corrigir</button>`:''}</div>
+      ${isAdmin&&t.status!=='draft'?`<button class="linkbtn" id="tmUnlock">Destrancar pra corrigir</button>`:''}
+      ${isAdmin&&TMS[tmCur.id]?`<button class="linkbtn tmdel" id="tmDel">🗑 Excluir T&amp;M</button>`:''}</div>
     <datalist id="tmWorkers">${S.workers.map(w=>`<option value="${esc(w)}">`).join('')}</datalist>`;
   if(ed){tmPadInit(sg.img||null)}
 }
@@ -1812,6 +1813,7 @@ $('tmDlg').addEventListener('click',async e=>{const id=e.target.id;if(!tmCur&&id
   if(id==='tmPdf'){tmPdf(tmCur.data);return}
   if(id==='tmInvSave'&&FIN){const inv=tidy($('tmInv').value);const t=TMS[tmCur.id]||tmCur.data;const o=Object.assign(clone(t),{invoice:inv,status:inv?'invoiced':'signed',log:(t.log||[]).concat([{at:Date.now(),by:(ctx&&ctx.email)||'',what:inv?'faturada · invoice '+inv:'invoice apagado'}])});
     try{await db.doc('tm/'+tmCur.id).set(o);tmCur.data=o;tmRender();toast(inv?'✓ Marcada como faturada':'Invoice # apagado')}catch(err){console.error(err);toast('Não consegui salvar ('+(err.code||'erro')+')')}return}
+  if(id==='tmDel'&&isAdmin){tmDelOpen(tmCur.id);return}
   if(id==='tmUnlock'&&isAdmin){if(!confirm('Destrancar esta T&M pra corrigir? Fica registrado no histórico dela.'))return;const t=tmCur.data;
     const o=Object.assign(clone(t),{status:'draft',log:(t.log||[]).concat([{at:Date.now(),by:(ctx&&ctx.email)||'',what:'destrancada pra correção (número '+(t.no||'-')+' mantido)'}])});
     try{await db.doc('tm/'+tmCur.id).set(o);tmCur.data=o;tmRender();toast('Destrancada: corrija e envie de novo')}catch(err){toast('Não consegui ('+(err.code||'erro')+')')}}});
@@ -1821,12 +1823,44 @@ function renderTmTab(){const box=$('tmList');if(!box||$('view-tm').hidden)return
   $('tmDay').textContent=dateBR(cur);
   box.innerHTML=jobs.length?jobs.map(j=>{const t=TMS[tmId(cur,j.id)];
     return `<div class="tmrow"><div><b>${esc(tidy(j.company)||'Obra')}</b> ${tmBadge(j)}<small>${esc(j.waiting?'(Esperando)':j.address)} · ${j.crew.length} pessoas${t?' · TMH '+hmTxt(t.tmh||tmTotal(t)):''}${t&&t.invoice?' · Invoice '+esc(t.invoice):''}</small></div>
-      <div class="tmrowbtn"><button class="btn" data-tmopen="${j.id}">${t?(t.status==='draft'?'Continuar':'Abrir'):'Criar T&M'}</button>${t&&t.status!=='draft'?`<button class="btn" data-tmpdf="${j.id}">PDF</button>`:''}</div></div>`}).join('')
+      <div class="tmrowbtn"><button class="btn" data-tmopen="${j.id}">${t?(t.status==='draft'?'Continuar':'Abrir'):'Criar T&M'}</button>${t&&t.status!=='draft'?`<button class="btn" data-tmpdf="${j.id}">PDF</button>`:''}${t&&isAdmin?`<button class="btn danger" data-tmdel="${j.id}" aria-label="Excluir T&M" title="Excluir T&M">🗑</button>`:''}</div></div>`}).join('')
     :'<p class="empty">Nenhuma obra neste dia.</p>'}
 $('view-tm').addEventListener('click',e=>{const o=e.target.closest('[data-tmopen]');if(o){tmOpen(o.dataset.tmopen);return}
+  const dl=e.target.closest('[data-tmdel]');if(dl){tmDelOpen(tmId(cur,dl.dataset.tmdel));return}
   const p=e.target.closest('[data-tmpdf]');if(p){const t=TMS[tmId(cur,p.dataset.tmpdf)];if(t)tmPdf(t)}});
 if($('tab-tm')){$('tab-tm').hidden=!(P.escala||FIN);$('tab-tm').onclick=()=>{tab('tm');renderTmTab()}}
 if($('photosPanel'))$('photosPanel').addEventListener('click',e=>{const o=e.target.closest('[data-tmopen]');if(o){e.stopPropagation();tmOpen(o.dataset.tmopen)}});
+/* ---- excluir T&M (só admin, pedindo a senha de novo; guarda cópia em tmdeleted) ---- */
+let tmDelId=null;
+function tmDelOpen(id){const t=TMS[id];if(!t||!isAdmin)return;tmDelId=id;
+  $('tmDelInfo').innerHTML=`<b>${esc(t.company||'Obra')}</b> · ${esc(t.date.split('-').reverse().join('/'))}${t.no?' · '+esc(t.no):''} · ${(t.rows||[]).length} pessoas · TMH ${hmTxt(t.tmh||tmTotal(t))}`;
+  $('tmDelWhy').value='';$('tmDelPwd').value='';$('tmDelMsg').textContent='';$('tmDelGo').disabled=false;$('tmDelDlg').hidden=false;setTimeout(()=>$('tmDelWhy').focus(),50)}
+function tmDelClose(){tmDelId=null;$('tmDelPwd').value='';$('tmDelDlg').hidden=true}
+async function tmDelGo(){const id=tmDelId,t=TMS[id];if(!t)return;const why=tidy($('tmDelWhy').value),pwd=$('tmDelPwd').value;
+  if(!why){$('tmDelMsg').textContent='Escreva o motivo.';return}
+  if(!pwd){$('tmDelMsg').textContent='Digite sua senha.';return}
+  if(!(ctx&&ctx.reauth)){$('tmDelMsg').textContent='Não consegui conferir a senha neste aparelho.';return}
+  $('tmDelGo').disabled=true;$('tmDelMsg').textContent='Conferindo a senha…';
+  try{await ctx.reauth(pwd)}catch(e){$('tmDelGo').disabled=false;
+    const c=(e&&e.code)||'';$('tmDelMsg').textContent=/wrong-password|invalid-credential|invalid-login/.test(c)?'Senha errada.':/too-many/.test(c)?'Muitas tentativas. Espere uns minutos.':'Não consegui conferir a senha ('+(c||'erro')+'). Precisa de internet.';return}
+  const now=Date.now(),by=(ctx&&ctx.email)||'';
+  try{await db.doc('tmdeleted/'+id+'_'+now).set({tmId:id,date:t.date,company:t.company||'',no:t.no||'',deletedBy:by,deletedAt:now,reason:why,data:t});
+    await db.doc('tm/'+id).delete();
+    tmDelClose();if(tmCur&&tmCur.id===id){tmCur=null;$('tmDlg').hidden=true;document.body.classList.remove('modal-open')}
+    delete TMS[id];renderTmTab();renderPhotos();toast('T&M excluída · registrado: '+by)}
+  catch(e){console.error(e);$('tmDelGo').disabled=false;$('tmDelMsg').textContent='Não consegui excluir ('+(e.code||'erro')+'). As regras novas do Firebase foram publicadas?'}}
+$('tmDelClose').onclick=tmDelClose;$('tmDelGo').onclick=tmDelGo;$('tmDelDlg').addEventListener('click',e=>{if(e.target.id==='tmDelDlg')tmDelClose()});
+$('tmDelPwd').addEventListener('keydown',e=>{if(e.key==='Enter')tmDelGo()});
+async function tmGoneOpen(){$('tmGoneDlg').hidden=false;document.body.classList.add('modal-open');$('tmGoneList').innerHTML='<p class="empty">Carregando…</p>';
+  try{const q=await db.collection('tmdeleted').orderBy('deletedAt','desc').limit(100).get();
+    $('tmGoneList').innerHTML=q.docs.length?q.docs.map(d=>{const x=d.data();return `<div class="tmrow"><div><b>${esc(x.company||'Obra')}</b> <span class="tmb">${esc(x.no||'sem número')}</span>
+      <small>Folha de ${esc((x.date||'').split('-').reverse().join('/'))} · excluída ${esc(new Date(x.deletedAt).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}))} por <b>${esc(x.deletedBy)}</b><br>Motivo: ${esc(x.reason||'—')}</small></div>
+      <div class="tmrowbtn"><button class="btn" data-gonepdf="${esc(d.id)}">PDF</button></div></div>`}).join(''):'<p class="empty">Nenhuma T&M excluída.</p>';
+    $('tmGoneList').onclick=e=>{const b=e.target.closest('[data-gonepdf]');if(!b)return;const d=q.docs.find(x=>x.id===b.dataset.gonepdf);if(d&&d.data().data)tmPdf(d.data().data)}}
+  catch(e){console.error(e);$('tmGoneList').innerHTML='<p class="empty">Não consegui carregar ('+esc(e.code||'erro')+').</p>'}}
+function tmGoneClose(){$('tmGoneDlg').hidden=true;if($('tmDlg').hidden)document.body.classList.remove('modal-open')}
+$('tmGoneClose').onclick=tmGoneClose;$('tmGoneDlg').addEventListener('click',e=>{if(e.target.id==='tmGoneDlg')tmGoneClose()});
+if($('tmGoneBtn')){$('tmGoneBtn').hidden=!(isAdmin||FIN);$('tmGoneBtn').onclick=tmGoneOpen}
 if(viewer)tab('day');
 $('date').value=cur;showWeekday();
 S=normRoster(null);

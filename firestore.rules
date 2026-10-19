@@ -178,7 +178,16 @@ service cloud.firestore {
               && (can('escala') || isDriverOf(request.resource.data.date, request.resource.data.jobId)))
           || (fin() && resource.data.status in ['signed', 'invoiced'] && request.resource.data.status in ['signed', 'invoiced']
               && onlyChanged(['invoice', 'status', 'log'])));
-      allow delete: if isAdmin();
+      // excluir: só admin, e só logo depois de digitar a senha de novo (até 5 min)
+      allow delete: if isAdmin() && request.time < timestamp.value((request.auth.token.auth_time + 300) * 1000);
+    }
+    // T&M excluídas: cópia + quem excluiu, quando e por quê. Ninguém altera nem apaga esse registro.
+    match /tmdeleted/{id} {
+      allow read: if isAdmin() || fin();
+      allow create: if isAdmin() && request.resource.data.deletedBy == me()
+        && request.resource.data.keys().hasOnly(['tmId', 'date', 'company', 'no', 'deletedBy', 'deletedAt', 'reason', 'data'])
+        && request.resource.data.reason is string && request.resource.data.reason.size() > 0 && request.resource.data.reason.size() <= 200;
+      allow update, delete: if false;
     }
     // Numeração das T&M digitais: só sobe de 1 em 1 (nunca repete)
     match /counters/tm {

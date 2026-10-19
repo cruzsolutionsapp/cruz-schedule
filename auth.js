@@ -1,7 +1,8 @@
 /* ===== Firebase + login + controle de acesso ===== */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  sendEmailVerification, sendPasswordResetEmail, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+  sendEmailVerification, sendPasswordResetEmail, signOut, setPersistence, browserLocalPersistence,
+  reauthenticateWithCredential, EmailAuthProvider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, getDoc, getDocs,
   setDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -141,7 +142,9 @@ async function route(u) {
   $('tab-access').hidden = !isAdmin;
   $('logout').onclick = () => { try { started && started.flushAll(); } catch (e) {} signOut(auth); };
   $('logout2').onclick = $('logout').onclick;
-  started = window.startApp(dbw, { email: me, isAdmin, perms, worker: md.worker || '', totem: totemOnly });
+  // confere a senha de novo (pra excluir T&M etc.): só passa se a senha for a deste login
+  const reauth = pwd => reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(auth.currentUser.email, pwd)).then(() => auth.currentUser.getIdToken(true)).then(() => true);
+  started = window.startApp(dbw, { email: me, isAdmin, perms, worker: md.worker || '', totem: totemOnly, reauth });
   setupMembers(isAdmin, me);
 }
 /* ----- link de demonstração (#demo): dados inventados na memória, sem login, nada é salvo ----- */
@@ -229,7 +232,7 @@ function startDemo() {
   $('logout').textContent = 'Recomeçar'; $('logout').onclick = () => location.reload();
   $('logout2').onclick = () => location.reload();
   $('tab-access').hidden = true;
-  started = window.startApp(memDb(demoSeed()), { email: 'demo@exemplo', isAdmin: true, perms: { escala: true, apagar: true, cadastro: true, telefones: true, backup: true, fotos: true, financeiro: true }, worker: '' });
+  started = window.startApp(memDb(demoSeed()), { email: 'demo@exemplo', isAdmin: true, perms: { escala: true, apagar: true, cadastro: true, telefones: true, backup: true, fotos: true, financeiro: true }, worker: '', reauth: pwd => pwd === 'demo' ? Promise.resolve(true) : Promise.reject({ code: 'auth/wrong-password' }) });
 }
 
 /* ----- gerenciar quem tem acesso (só administrador) ----- */
