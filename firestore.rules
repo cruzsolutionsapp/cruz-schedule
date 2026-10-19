@@ -41,6 +41,16 @@ service cloud.firestore {
     function isTotem() {
       return isMember() && member().get('perms', {}).get('totem', false) == true;
     }
+    // Escala do dia: só os campos certos, data batendo com o documento e no máximo 150 obras
+    function dayOk(day) {
+      return request.resource.data.keys().hasOnly(['date', 'jobs', 'sent', 'drivers'])
+        && request.resource.data.date == day
+        && request.resource.data.jobs is list && request.resource.data.jobs.size() <= 150;
+    }
+    // Cadastro: listas com tamanho razoável (evita alguém encher o banco)
+    function rosterOk() {
+      return !('workers' in request.resource.data) || (request.resource.data.workers is list && request.resource.data.workers.size() <= 1000);
+    }
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
@@ -53,7 +63,7 @@ service cloud.firestore {
     }
 
     match /members/{email} {
-      allow read: if signedIn() && (email == me() || isMember());
+      allow read: if signedIn() && (email == me() || isAdmin());
       allow create: if isAdmin()
         || (signedIn() && email == me()
             && request.resource.data.role == 'admin'
@@ -75,14 +85,14 @@ service cloud.firestore {
 
     match /config/roster {
       allow read: if isMember();
-      allow create: if can('cadastro');
-      allow update: if can('cadastro') || (can('escala') && onlyChanged(['companies', 'travel', 'offices']));
+      allow create: if can('cadastro') && rosterOk();
+      allow update: if (can('cadastro') || (can('escala') && onlyChanged(['companies', 'travel', 'offices']))) && rosterOk();
     }
 
     // "Atualizar a TV": quem edita escala manda a TV recarregar
     match /config/tvping {
       allow read: if isMember();
-      allow write: if can('escala');
+      allow write: if can('escala') && request.resource.data.keys().hasOnly(['at', 'by']);
     }
 
     // Telefones: só quem tem "Telefones e avisar equipe"
@@ -132,15 +142,17 @@ service cloud.firestore {
     // Histórico da escala (fotos a cada 5 min): todos do app veem; quem edita escala grava; só admin apaga
     match /dayhist/{id} {
       allow read: if isMember();
-      allow create, update: if can('escala') && request.resource.data.date is string;
+      allow create, update: if can('escala') && request.resource.data.date is string
+        && request.resource.data.keys().hasOnly(['date', 'at', 'by', 'jobs', 'sent', 'drivers', 'n', 'people', 'left'])
+        && request.resource.data.jobs is list && request.resource.data.jobs.size() <= 150;
       allow delete: if isAdmin();
     }
 
     // Escala de cada dia
     match /days/{day} {
       allow read: if isMember();
-      allow create: if can('escala');
-      allow update: if (can('escala') && (can('apagar') || request.resource.data.jobs.size() >= resource.data.jobs.size()))
+      allow create: if can('escala') && dayOk(day);
+      allow update: if dayOk(day) && (can('escala') && (can('apagar') || request.resource.data.jobs.size() >= resource.data.jobs.size()))
         || (can('telefones') && onlyChanged(['sent']));
       allow delete: if can('apagar');
     }

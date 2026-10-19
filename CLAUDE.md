@@ -9,7 +9,8 @@ App interno (PWA) da Cruz Solutions Services Corporation para montar a escala di
 - `app-core.js` — toda a lógica do schedule (script clássico; expõe `window.startApp(db, ctx)`). Usa um adaptador `db.doc(path).set/get/onSnapshot` e `db.collection(path).where/orderBy/limit/get`.
 - `auth.js` — módulo ES: Firebase, login, verificação de e-mail, lista de acesso (`members`), adaptador do banco, registro do service worker.
 - `sw.js` — offline. **Ao mudar arquivos do app, aumente `VERSION` em `sw.js`.** Arquivos do app: rede primeiro com `?_=hora` (fura o cache de até 10 min do CDN do GitHub Pages); offline usa o cache.
-- `firestore.rules` — regras de segurança. Não são publicadas automaticamente: o usuário cola no Console do Firebase → Firestore → Regras.
+- `index.html` tem Content-Security-Policy (meta): scripts só de self/gstatic/cdnjs; conexões só googleapis/firebaseio/firebaseapp. Se adicionar serviço externo novo, liberar lá (senão o navegador bloqueia).
+- `firestore.rules` — regras de segurança (endurecidas 19/10: members só o próprio ou admin lê; `dayOk` valida campos/data/≤150 obras em days; dayhist e tvping só campos certos; `rosterOk` ≤1000 nomes). Não são publicadas automaticamente: o usuário cola no Console do Firebase → Firestore → Regras.
 
 ## Dados (Firestore)
 - `config/roster`: `{workers[], vehicles[{n,t (🛻/🚐/🚛/🚗; 🚚 antigo vira 🚛 no normRoster),d?:motorista fixo — escolhido em Cadastro → Veículos; ao escalar ele, o carro entra sozinho (autoVeh), editável}], companies{nome:[endereços]}, base, travel{endereçoNormalizado:min}, drivers[nomes marcados como Motorista], offices{companhia: endereço do office/shop dela}, boss: WhatsApp de quem recebe o relatório do dia}`
