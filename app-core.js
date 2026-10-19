@@ -1676,7 +1676,7 @@ const tmTotal=t=>(t.rows||[]).filter(r=>tidy(r.name)).reduce((s,r)=>s+rowMinutes
 const tmStatusTxt={draft:'Rascunho',pending:'Enviando…',signed:'Assinada',invoiced:'Faturada'};
 const tmCanEdit=t=>(!t||t.status==='draft')&&(P.escala||myJobs().some(j=>j.id===(t&&t.jobId)));
 function tmNew(j){return {date:cur,jobId:j.id,site:jobSite(j),company:tidy(j.company),location:j.waiting?'':tidy(j.address),jobNo:'',
-  rows:j.crew.map(c=>({name:tidy(c.name),in:'',out:'',lunch:true})),materials:'',status:'draft',no:'',sign:null,tmh:0,
+  rows:tmPeople(j).map(n=>({name:n,in:'',out:'',lunch:true})),materials:'',status:'draft',no:'',sign:null,tmh:0,
   driver:(myJobs().some(x=>x.id===j.id)&&ME)||jobDrivers(j)[0]||'',by:(ctx&&ctx.email)||'',atMs:Date.now(),invoice:'',log:[]}}
 let tmKey='';
 function watchTm(){const key=(P.escala||FIN)?'all:'+cur:cur+':'+myJobs().map(j=>j.id).join(',');if(key===tmKey)return;tmKey=key;
@@ -1688,9 +1688,23 @@ function watchTm(){const key=(P.escala||FIN)?'all:'+cur:cur+':'+myJobs().map(j=>
   else myJobs().forEach(j=>{tmDocUnsubs.push(db.doc('tm/'+tmId(cur,j.id)).onSnapshot(d=>{const x=d.exists?d.data():null;if(x)TMS[d.id]=x;else delete TMS[d.id];redraw()},e=>console.error('tm',e)))})}
 function tmBadge(j){const t=TMS[tmId(cur,j.id)];if(!t)return '<span class="tmb none">sem T&M</span>';
   return `<span class="tmb ${t.status}">${t.no?esc(t.no)+' · ':''}${tmStatusTxt[t.status]||''}</span>`}
+/* nomes da T&M = quem o motorista marcou que VEIO (Quem veio hoje?). Sem presença marcada: a equipe toda. */
+function tmPeople(j){const a=ATT[j.id];const ppl=(a&&a.people)||{};const marked=Object.keys(ppl).length>0;
+  const out=j.crew.filter(c=>marked?attOf(j,c.name)==='in':true).map(c=>tidy(c.name));
+  if(marked)Object.keys(ppl).forEach(n=>{if(ppl[n]==='in'&&!out.some(x=>nkey(x)===nkey(n)))out.push(tidy(n))});return out}
+function tmAttNote(j){const a=ATT[j.id];const ppl=(a&&a.people)||{};
+  if(!Object.keys(ppl).length)return '<p class="alert warn tmatt">⚠️ A presença ainda não foi marcada ("Quem veio hoje?"). Por enquanto veio a equipe toda da escala: marque quem veio e quem faltou que a lista se ajusta sozinha.</p>';
+  const falt=Object.keys(ppl).filter(n=>ppl[n]==='out'),sem=j.crew.filter(c=>!attOf(j,c.name)).map(c=>c.name);
+  return `<p class="alert ok tmatt">✓ Nomes puxados da presença (quem veio).${falt.length?' Faltaram (fora da folha): '+esc(falt.join(', '))+'.':''}${sem.length?' <b>Sem marcar:</b> '+esc(sem.join(', '))+' — marque em "Quem veio hoje?".':''}</p>`}
+/* rascunho aberto de novo: tira quem foi marcado que faltou (se não tem horário) e põe quem veio e não está */
+function tmSyncAtt(t,j){if(!j||t.status!=='draft')return false;const a=ATT[j.id];const ppl=(a&&a.people)||{};if(!Object.keys(ppl).length)return false;let ch=false;
+  t.rows=t.rows.filter(r=>{const k=Object.keys(ppl).find(n=>nkey(n)===nkey(r.name||''));if(k&&ppl[k]==='out'&&!r.in&&!r.out){ch=true;return false}return true});
+  tmPeople(j).forEach(n=>{if(!t.rows.some(r=>nkey(r.name||'')===nkey(n))){const i=t.rows.findIndex(r=>!tidy(r.name));const row={name:n,in:'',out:'',lunch:true};if(i>=0)t.rows.splice(i,0,row);else t.rows.push(row);ch=true}});
+  return ch}
 /* ---- editor ---- */
 function tmOpen(jobId,date){const d=date||cur,id=tmId(d,jobId);const j=D.jobs.find(x=>x.id===jobId);
   const base=TMS[id]?clone(TMS[id]):(j&&d===cur?tmNew(j):null);if(!base){toast('Não achei essa T&M');return}
+  if(TMS[id]&&j&&d===cur&&tmSyncAtt(base,j)){tmCur={id,data:base};tmDirty=true;$('tmDlg').hidden=false;document.body.classList.add('modal-open');tmRender();tmSoon();toast('Lista ajustada pela presença marcada');return}
   tmCur={id,data:base};tmDirty=false;$('tmDlg').hidden=false;document.body.classList.add('modal-open');tmRender()}
 function tmClose(){if(tmDirty&&tmCanEdit(tmCur.data))tmSave(true);tmCur=null;$('tmDlg').hidden=true;document.body.classList.remove('modal-open')}
 function tmRender(){if(!tmCur)return;const t=tmCur.data,ed=tmCanEdit(t);
@@ -1710,6 +1724,7 @@ function tmRender(){if(!tmCur)return;const t=tmCur.data,ed=tmCanEdit(t);
       <label class="f">Location<input data-tk="location" value="${esc(t.location)}" ${ed?'':'disabled'}></label>
       <label class="f">Job #<input data-tk="jobNo" value="${esc(t.jobNo)}" placeholder="opcional" ${ed?'':'disabled'}></label>
     </div>
+    ${ed&&t.date===cur&&D.jobs.find(x=>x.id===t.jobId)?tmAttNote(D.jobs.find(x=>x.id===t.jobId)):''}
     ${ed?`<div class="tmteam"><b>Horário da turma</b><input type="time" id="tmTin" aria-label="Entrada da turma"><span>até</span><input type="time" id="tmTout" aria-label="Saída da turma">
       <button class="btn" id="tmApply">Aplicar pra todos</button><small>Depois é só mudar quem foi diferente.</small></div>`:''}
     <div class="tmtablewrap"><table class="tmtable"><thead><tr><th>#</th><th>Names</th><th>Time In</th><th>Time Out</th><th title="Já descontado 30 min de almoço">Horas</th></tr></thead><tbody>${rows}</tbody>
@@ -1750,8 +1765,8 @@ async function tmSend(){const t=tmCur.data,o=tmClean(t);
   if(!o.rows.length){toast('Coloque pelo menos um nome');return}
   const miss=o.rows.filter(r=>!r.in||!r.out).map(r=>r.name);if(miss.length){toast('Falta horário de: '+miss.join(', '),5000);return}
   if(!o.company){toast('Falta o Bill To (companhia)');return}
-  const hasSig=!!(t.sign&&t.sign.img);
-  if(!confirm(`Enviar a T&M de ${o.company}?\n\n${o.rows.length} pessoa${o.rows.length>1?'s':''} · TMH ${hmTxt(o.tmh)}${hasSig?'':'\n\n⚠️ Está SEM assinatura do cliente.'}\n\nDepois de enviada ela fica trancada.`))return;
+  const hasSig=!!(t.sign&&t.sign.img);const jj=t.date===cur&&D.jobs.find(x=>x.id===t.jobId);const semMarca=jj&&ATT[jj.id]&&ATT[jj.id].people?jj.crew.filter(c=>!attOf(jj,c.name)&&!o.rows.some(r=>nkey(r.name)===nkey(c.name))).map(c=>c.name):[];
+  if(!confirm(`Enviar a T&M de ${o.company}?\n\n${o.rows.length} pessoa${o.rows.length>1?'s':''} · TMH ${hmTxt(o.tmh)}${hasSig?'':'\n\n⚠️ Está SEM assinatura do cliente.'}${semMarca.length?'\n\n⚠️ Sem presença marcada e fora da folha: '+semMarca.join(', '):''}\n\nDepois de enviada ela fica trancada.`))return;
   o.status='pending';o.sentAt=Date.now();o.log=(o.log||[]).concat([{at:Date.now(),by:o.by,what:'enviada pelo app'+(hasSig?'':' (sem assinatura)')}]);
   const id=tmCur.id;const pr=db.doc('tm/'+id).set(o);if(navigator.onLine){try{await pr}catch(e){console.error(e);toast('Não consegui enviar ('+(e.code||'erro')+')');return}}else pr.catch(e=>console.error(e));
   tmDirty=false;tmCur.data=o;
