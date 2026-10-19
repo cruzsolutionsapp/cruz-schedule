@@ -598,8 +598,8 @@ body.viewer{padding-bottom:24px}
 .toolsbar:empty{display:none}
 .toolsbar .histlinks{row-gap:2px}
 /* dia da semana embaixo da data */
-.datewrap{display:flex;flex-direction:column;align-items:center;gap:1px}
-.dateweek{font-size:12px;font-weight:700;color:var(--hivis);text-transform:uppercase;letter-spacing:.04em;line-height:1.1}
+.datewrap{display:flex;flex-direction:column;align-items:center;gap:6px}
+.dateweek{font-size:12px;font-weight:700;color:var(--hivis);text-transform:uppercase;letter-spacing:.04em;line-height:1.1;text-align:center;white-space:nowrap}
 .wkrow{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
 .wkend{font-size:.92em;color:var(--muted)}
 /* copiar obras do último dia */
