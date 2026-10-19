@@ -1765,14 +1765,14 @@ async function tmPdf(t){const rows=t.rows.slice();while(rows.length<15)rows.push
   const w=window.open('','_blank');if(!w){toast('O navegador bloqueou a janela do PDF. Libere pop-ups pra este site.');return}
   w.document.write('<p style="font-family:sans-serif">Preparando o PDF…</p>');const logo=await tmLogoData();w.document.open();
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>T&M ${esc(t.no||'')} - ${esc(t.company)}</title><style>
-  @page{size:letter;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .sheet{border:1.5px solid #222;padding:14px 16px}.top{display:flex;justify-content:space-between;gap:16px}.co{text-align:center;width:52%}
-  .lg{display:block;width:150px;height:98px;margin:0 auto;object-fit:contain}
+  @page{size:letter;margin:9mm}*{box-sizing:border-box}html,body{margin:0;padding:0}body{width:748px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sheet{border:1.5px solid #222;padding:12px 14px;break-inside:avoid;page-break-inside:avoid}.top{display:flex;justify-content:space-between;gap:16px}.co{text-align:center;width:52%}
+  .lg{display:block;width:130px;height:84px;margin:0 auto;object-fit:contain}
   .co p{margin:2px 0;font-weight:700}.ti{width:44%}.ti h1{font-size:22px;margin:0;text-align:center}.ti .no{text-align:center;font-size:18px;margin:2px 0 8px;font-family:"Courier New",monospace}
   .ln{display:flex;gap:6px;margin:5px 0}.ln span{white-space:nowrap}.ln b{flex:1;border-bottom:1px solid #333;font-weight:400;min-height:15px;padding-left:4px}
   .box{border:1px solid #333;padding:4px 8px;margin-top:6px}.box h4{margin:0;text-align:center;font-size:10px}
-  table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #333;padding:3px 6px;height:20px}th{font-weight:400}td.c{text-align:center}
-  .mat{border:1px solid #333;border-top:0;min-height:90px;padding:4px 8px;white-space:pre-wrap}.legal{font-size:10.5px;margin:10px 0}
+  table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #333;padding:2px 6px;height:19px}th{font-weight:400}td.c{text-align:center}
+  .mat{border:1px solid #333;border-top:0;min-height:70px;padding:4px 8px;white-space:pre-wrap}.legal{font-size:10.5px;margin:10px 0}
   .sig{display:flex;justify-content:space-between;gap:20px;margin-top:10px}.sig div{flex:1;text-align:center}.sig .v{border-bottom:1px solid #333;min-height:44px;display:flex;align-items:flex-end;justify-content:center}
   .sig img{max-height:60px}.tot td{font-weight:700}small{color:#555}</style></head><body><div class="sheet">
   <div class="top"><div class="co">${logo?`<img class="lg" src="${logo}" alt="Cruz Solutions">`:'<h2>CRUZ SOLUTIONS</h2>'}<p>599 Concord St, • Holliston, MA 01746</p><p>Phone: (508) 246-3219</p><p>info@cruzsolutionsinc.com</p>
@@ -1788,7 +1788,11 @@ async function tmPdf(t){const rows=t.rows.slice();while(rows.length<15)rows.push
   <div class="sig"><div><div class="v">${esc((t.sign&&t.sign.title)||'')}</div>Title</div><div style="max-width:30%"><div class="v">${t.sentAt?esc(new Date(t.sentAt).toLocaleDateString('en-US')):''}</div>Date</div></div>
   <div class="sig"><div><div class="v">${esc((t.sign&&t.sign.name)||'')}</div>Print Name</div><div style="max-width:40%"><div class="v">${t.sign&&t.sign.img?`<img src="${esc(t.sign.img)}">`:''}</div>Signature</div></div>
   </div><small>Digital T&amp;M · Cruz Solutions Schedule</small></body></html>`);
-  w.document.close();setTimeout(()=>{try{w.focus();w.print()}catch(e){}},600)}
+  w.document.close();
+  // cabe numa folha só: mede a folha e, se passar da altura da página Letter, diminui tudo na proporção
+  const fit=()=>{try{const sh=w.document.querySelector('.sheet'),ft=w.document.querySelector('body>small');sh.style.zoom='';const hgt=sh.offsetHeight+(ft?ft.offsetHeight:0)+4;
+    const maxH=950;if(hgt>maxH){const z=Math.max(.5,maxH/hgt);w.document.body.style.zoom=z}}catch(e){}};
+  setTimeout(()=>{fit();try{w.focus();w.print()}catch(e){}},700)}
 /* ---- eventos do editor ---- */
 $('tmDlg').addEventListener('input',e=>{if(!tmCur)return;const t=tmCur.data,el=e.target;
   const tr=el.closest('tr[data-ri]');if(tr&&el.dataset.tf){const r=t.rows[+tr.dataset.ri];if(!r)return;if(el.dataset.tf==='lunch')r.lunch=el.checked;else r[el.dataset.tf]=el.value;
