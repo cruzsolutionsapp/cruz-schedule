@@ -60,6 +60,7 @@
     <button class="tab" role="tab" id="tab-day" aria-selected="true">Escala</button>
     <button class="tab" role="tab" id="tab-cal" aria-selected="false">Calendário</button>
     <button class="tab" role="tab" id="tab-photos" aria-selected="false" hidden>Fotos</button>
+    <button class="tab" role="tab" id="tab-tm" aria-selected="false" hidden>🧾 T&amp;M</button>
     <button class="tab" role="tab" id="tab-roster" aria-selected="false">Cadastro</button>
     <button class="tab" role="tab" id="tab-access" aria-selected="false" hidden>Acesso</button>
     <button class="btn primary searchtab" role="tab" id="tab-search" aria-selected="false">🔍 Buscar</button>
@@ -122,6 +123,14 @@
       </div>
       <div class="calgrid" id="calGrid"></div>
       <p class="hint" id="calHint">Toque num dia pra ver ou criar agendamentos. O agendamento já entra como obra na escala daquele dia; a equipe você monta depois.</p>
+    </div>
+  </section>
+
+  <section id="view-tm" hidden>
+    <div class="panel">
+      <h2>🧾 Time &amp; Material · <span id="tmDay"></span></h2>
+      <p class="hint">Folha de horas digital de cada obra. O motorista preenche no celular (painel "Minha obra hoje"); aqui o escritório confere, completa e baixa o PDF. Troque o dia na data lá em cima.</p>
+      <div id="tmList" class="tmlist"></div>
     </div>
   </section>
 
@@ -334,6 +343,12 @@
     <p class="hint">Marque as obras que vão se repetir neste dia. <button class="linkbtn" id="cpAll">Marcar todas</button> · <button class="linkbtn" id="cpNone">Desmarcar todas</button></p>
     <div id="cpList" class="cplist"></div>
     <button class="btn primary" id="cpGo" style="margin-top:10px">Copiar as marcadas</button>
+  </div>
+</div>
+<div class="modal" id="tmDlg" hidden>
+  <div class="sheet tmsheet" role="dialog" aria-modal="true" aria-label="Time and Material">
+    <div class="sheethead"><h2>🧾 Time &amp; Material</h2><button class="icon-btn" id="tmClose" aria-label="Fechar">×</button></div>
+    <div id="tmBody"></div>
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>

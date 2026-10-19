@@ -609,3 +609,48 @@ body.viewer{padding-bottom:24px}
 .cprow small{display:block;color:var(--muted)}
 .cprow.dis{opacity:.55;cursor:default}
 .cpalready{font-size:12px;color:var(--ok);font-weight:700}
+/* ===== T&M (Time & Material digital) — só classes novas ===== */
+.tmsheet{max-width:820px}
+.tmhead{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding-bottom:10px}
+.tmlogo{display:flex;align-items:center;gap:10px}.tmlogo .logo{width:70px;height:46px;flex:none}.tmlogo small{color:var(--muted);font-size:11px;line-height:1.3}
+.tmtitle{display:flex;flex-direction:column;align-items:flex-end;gap:2px}.tmtitle b{font-size:20px}
+.tmno{font-family:"Courier New",monospace;font-size:18px;font-weight:700}.tmno i{font-family:inherit;font-size:12px;font-weight:400;color:var(--muted)}
+.tmst,.tmb{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);letter-spacing:.03em}
+.tmst.signed,.tmb.signed{background:var(--ok-soft);color:var(--ok)}.tmst.invoiced,.tmb.invoiced{background:var(--ok);color:var(--surface)}
+.tmst.pending,.tmb.pending,.tmst.draft,.tmb.draft{background:var(--warn-soft);color:var(--warn)}
+.tmgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tmteam{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--sunk);padding:10px;border-radius:10px}
+.tmteam input{font-size:15px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}.tmteam small{width:100%;color:var(--muted)}
+.tmtablewrap{overflow-x:auto}
+.tmtable{width:100%;border-collapse:collapse;font-size:14px}
+.tmtable th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:4px;border-bottom:1px solid var(--line)}
+.tmtable td{padding:3px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tmtable input:not([type=checkbox]){width:100%;min-width:0;font-size:15px;padding:6px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink)}
+.tmtable input[type=time]{min-width:96px}.tmtable input[type=checkbox]{width:20px;height:20px}
+.tmn{color:var(--muted);width:24px;text-align:right}.tmc{text-align:center}.tmh{font-weight:700;white-space:nowrap;text-align:right}
+.tmtotl{text-align:right;font-weight:700}
+.tmsign{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.tmlegal{font-size:12px;color:var(--muted);margin:0}
+.tmpadwrap{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+#tmPad{width:100%;max-width:600px;aspect-ratio:600/180;background:#fff;border:1.5px dashed #888;border-radius:10px;touch-action:none}
+.tmsigimg{max-width:300px;background:#fff;border-radius:8px;border:1px solid var(--line)}
+.tmoffice{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;background:var(--sunk);padding:10px;border-radius:10px}.tmoffice b{width:100%;font-size:12px;text-transform:uppercase}
+.tmbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tmdrv{display:flex;align-items:center;gap:8px;margin:8px 0}
+.tmlist{display:flex;flex-direction:column;gap:8px}
+.tmrow{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px}
+.tmrow small{display:block;color:var(--muted);margin-top:2px}.tmrowbtn{display:flex;gap:6px;flex:none}
+@media (max-width:560px){.tmgrid{grid-template-columns:minmax(0,1fr)}.tmtable input[type=time]{min-width:84px}.tmrow{flex-direction:column;align-items:stretch}}
+.tmsheet .sheethead{position:sticky;top:-16px;background:var(--surface);z-index:2;margin:-16px -16px 0;padding:12px 16px;border-bottom:1px solid var(--line)}
+@media (max-width:560px){
+  .tmlogo small{display:none}.tmtitle b{font-size:17px}
+  .tmtable thead{display:none}.tmtable,.tmtable tbody,.tmtable tfoot{display:block}
+  .tmtable tbody tr{display:grid;grid-template-columns:22px minmax(0,1fr) minmax(0,1fr) auto auto;gap:4px 6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+  .tmtable tbody td{border:0;padding:0}
+  .tmtable tbody td:nth-child(2){grid-column:2 / -1}
+  .tmtable tbody td:nth-child(3){grid-column:2}
+  .tmtable tbody td:nth-child(5)::before{content:'almoço ';font-size:10px;color:var(--muted)}
+  .tmtable tbody td:nth-child(5){display:flex;align-items:center;gap:2px}
+  .tmtable input[type=time]{min-width:0}
+  .tmtable tfoot tr{display:flex;justify-content:space-between;padding:8px 0}.tmtable tfoot td{border:0}.tmtable tfoot td:first-child{display:none}
+}

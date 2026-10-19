@@ -151,13 +151,14 @@ function watchDay(){
   watchPhotos();
   watchAtt();
   watchOff();
+  tmKey='';
   unsubDay=db.doc(path).onSnapshot(snap=>{
     if(path!==dayPath(cur))return;
     if(pend[path])return;
     if(dayLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
     const d=snap.exists?snap.data():null;
     if(dayLoaded&&d&&stable(d)===lastSent[path])return;
-    D=normDay(d);BASE[path]=d?clone(d):null;dayLoaded=true;rerender();renderTotem();
+    D=normDay(d);BASE[path]=d?clone(d):null;dayLoaded=true;rerender();renderTotem();watchTm();renderTmTab();
     resumePend(path,snap);
     lastDrivers=d&&d.drivers||{};
     dayFromServer=!(snap.metadata&&snap.metadata.fromCache);
@@ -752,7 +753,7 @@ $('copyMsg').onclick=()=>{
 };
 
 /* ---------- abas ---------- */
-function tab(which){['day','roster','access','photos','search','cal'].forEach(t=>{const b=$('tab-'+t),v=$('view-'+t);if(b)b.setAttribute('aria-selected',t===which);if(v)v.hidden=t!==which})}
+function tab(which){['day','roster','access','photos','search','cal','tm'].forEach(t=>{const b=$('tab-'+t),v=$('view-'+t);if(b)b.setAttribute('aria-selected',t===which);if(v)v.hidden=t!==which})}
 $('tab-day').onclick=()=>{tab('day');renderJobs()};$('tab-roster').onclick=()=>{tab('roster');renderRoster()};if($('tab-access'))$('tab-access').onclick=()=>tab('access');
 
 /* ---------- cadastro ---------- */
@@ -1052,6 +1053,7 @@ function renderPhotos(){
   $('photosBody').innerHTML=jobs.map(j=>{const mine=list.filter(p=>p.site?p.site===jobSite(j):p.jobId===j.id);
     return `<div class="phjob"><div class="phhead"><b>${esc(j.company||'Obra')}</b><small>${esc(j.waiting?'Endereço a confirmar':j.address)}</small></div>
     ${attBlock(j)}
+    <div class="tmdrv"><button class="btn primary" data-tmopen="${j.id}">🧾 Time &amp; Material</button>${tmBadge(j)}</div>
     <h4 class="phsub">Fotos</h4>
     ${camBtns(j.id)}
     ${mine.length?`<div class="phgrid">${mine.map(p=>thumbBtn(p,hhmm(p.atMs))).join('')}</div>`:'<span class="empty">Nenhuma foto hoje.</span>'}
@@ -1655,6 +1657,172 @@ if(viewer)$('tab-search').hidden=true;
   window.addEventListener('resize',align);try{new ResizeObserver(align).observe($('topbar'))}catch(e){}
   try{new MutationObserver(align).observe(row,{attributes:true,subtree:true,attributeFilter:['hidden']})}catch(e){}
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(align);setTimeout(align,300);align()})();
+/* ===================== TIME & MATERIAL digital (folha de ponto) =====================
+   tm/{data}_{jobId}: {date, jobId, site, company, location, jobNo, rows[{name,in,out,lunch}], materials,
+     status:'draft'|'pending'|'signed'|'invoiced', no:'D-0001', sign{name,title,img}, tmh(min), driver, by, atMs, sentAt, invoice, log[]}
+   Número: counters/tm {next} (transação, nunca repete). Horas: (saída−entrada) − 30 min de almoço (se marcado);
+   arredonda pra hora cheia só quando faltam menos de 5 min (7h56 → 8h00). */
+const FIN=!!(P.financeiro||isAdmin);
+const TMS={};let tmUnsub=null,tmDocUnsubs=[],tmCur=null,tmDirty=false,tmSaveT=null,tmSign=null;
+const tmId=(date,jobId)=>date+'_'+jobId;
+const tmMin=t=>{if(!t||!/^\d{1,2}:\d{2}$/.test(t))return null;const[h,m]=t.split(':').map(Number);return h*60+m};
+function rowMinutes(r){const a=tmMin(r.in),b=tmMin(r.out);if(a==null||b==null)return 0;let m=b-a;if(m<0)m+=1440;if(r.lunch!==false&&m>30)m-=30;
+  const rem=m%60;if(rem>=56)m+=60-rem;return m}
+const hmTxt=m=>m?Math.floor(m/60)+'h'+String(m%60).padStart(2,'0'):'—';
+const hDec=m=>(m/60).toFixed(2);
+const tmTotal=t=>(t.rows||[]).filter(r=>tidy(r.name)).reduce((s,r)=>s+rowMinutes(r),0);
+const tmStatusTxt={draft:'Rascunho',pending:'Enviando…',signed:'Assinada',invoiced:'Faturada'};
+const tmCanEdit=t=>(!t||t.status==='draft')&&(P.escala||myJobs().some(j=>j.id===(t&&t.jobId)));
+function tmNew(j){return {date:cur,jobId:j.id,site:jobSite(j),company:tidy(j.company),location:j.waiting?'':tidy(j.address),jobNo:'',
+  rows:j.crew.map(c=>({name:tidy(c.name),in:'',out:'',lunch:true})),materials:'',status:'draft',no:'',sign:null,tmh:0,
+  driver:(myJobs().some(x=>x.id===j.id)&&ME)||jobDrivers(j)[0]||'',by:(ctx&&ctx.email)||'',atMs:Date.now(),invoice:'',log:[]}}
+let tmKey='';
+function watchTm(){const key=(P.escala||FIN)?'all:'+cur:cur+':'+myJobs().map(j=>j.id).join(',');if(key===tmKey)return;tmKey=key;
+  tmDocUnsubs.forEach(u=>u());tmDocUnsubs=[];if(tmUnsub){tmUnsub();tmUnsub=null}Object.keys(TMS).forEach(k=>delete TMS[k]);
+  const redraw=()=>{renderTmTab();renderPhotos();if(!tmCur||!TMS[tmCur.id])return;const srv=TMS[tmCur.id];
+    // enquanto alguém está preenchendo, não redesenha (perderia o que está digitando); só quando mudou o status (enviada/destrancada/faturada)
+    if(srv.status!==tmCur.data.status||srv.no!==tmCur.data.no||srv.invoice!==tmCur.data.invoice||!tmCanEdit(tmCur.data)){if(tmDirty&&tmCanEdit(tmCur.data)&&srv.status!=='draft')toast('Esta T&M foi enviada em outro aparelho');tmCur.data=clone(srv);tmDirty=false;tmRender()}};
+  if(P.escala||FIN){tmUnsub=db.collection('tm').where('date','==',cur).onSnapshot(s=>{Object.keys(TMS).forEach(k=>delete TMS[k]);s.docs.forEach(d=>TMS[d.id]=d.data());redraw()},e=>console.error('tm',e))}
+  else myJobs().forEach(j=>{tmDocUnsubs.push(db.doc('tm/'+tmId(cur,j.id)).onSnapshot(d=>{const x=d.exists?d.data():null;if(x)TMS[d.id]=x;else delete TMS[d.id];redraw()},e=>console.error('tm',e)))})}
+function tmBadge(j){const t=TMS[tmId(cur,j.id)];if(!t)return '<span class="tmb none">sem T&M</span>';
+  return `<span class="tmb ${t.status}">${t.no?esc(t.no)+' · ':''}${tmStatusTxt[t.status]||''}</span>`}
+/* ---- editor ---- */
+function tmOpen(jobId,date){const d=date||cur,id=tmId(d,jobId);const j=D.jobs.find(x=>x.id===jobId);
+  const base=TMS[id]?clone(TMS[id]):(j&&d===cur?tmNew(j):null);if(!base){toast('Não achei essa T&M');return}
+  tmCur={id,data:base};tmDirty=false;$('tmDlg').hidden=false;document.body.classList.add('modal-open');tmRender()}
+function tmClose(){if(tmDirty&&tmCanEdit(tmCur.data))tmSave(true);tmCur=null;$('tmDlg').hidden=true;document.body.classList.remove('modal-open')}
+function tmRender(){if(!tmCur)return;const t=tmCur.data,ed=tmCanEdit(t);
+  // sempre uma linha vazia no fim (abre mais uma quando preenche a última)
+  if(ed){if(!t.rows.length||tidy(t.rows[t.rows.length-1].name))t.rows.push({name:'',in:'',out:'',lunch:true})}
+  const rows=t.rows.map((r,i)=>{const m=rowMinutes(r);return `<tr data-ri="${i}"><td class="tmn">${i+1}</td>
+    <td>${ed?`<input data-tf="name" value="${esc(r.name)}" list="tmWorkers" placeholder="Nome" aria-label="Nome ${i+1}">`:esc(r.name)}</td>
+    <td>${ed?`<input type="time" data-tf="in" value="${esc(r.in)}" aria-label="Entrada ${i+1}">`:esc(fmt(r.in)||'—')}</td>
+    <td>${ed?`<input type="time" data-tf="out" value="${esc(r.out)}" aria-label="Saída ${i+1}">`:esc(fmt(r.out)||'—')}</td>
+    <td class="tmc">${ed?`<input type="checkbox" data-tf="lunch" ${r.lunch!==false?'checked':''} aria-label="Almoço ${i+1}">`:(r.lunch!==false?'✓':'—')}</td>
+    <td class="tmh" id="tmh-${i}">${tidy(r.name)?hmTxt(m):''}</td></tr>`}).join('');
+  const sg=t.sign||{};
+  $('tmBody').innerHTML=`<div class="tmhead"><div class="tmlogo"><div class="logo" role="img" aria-label="Cruz Solutions"></div><small>599 Concord St · Holliston, MA 01746<br>(508) 246-3219</small></div>
+      <div class="tmtitle"><b>Time &amp; Material</b><span class="tmno">${t.no?esc(t.no):'<i>número sai ao enviar</i>'}</span><span class="tmst ${t.status}">${tmStatusTxt[t.status]||''}</span></div></div>
+    <div class="tmgrid">
+      <label class="f">Bill To<input data-tk="company" value="${esc(t.company)}" ${ed?'':'disabled'}></label>
+      <label class="f">Date<input value="${esc(t.date.split('-').reverse().join('/'))}" disabled></label>
+      <label class="f">Location<input data-tk="location" value="${esc(t.location)}" ${ed?'':'disabled'}></label>
+      <label class="f">Job #<input data-tk="jobNo" value="${esc(t.jobNo)}" placeholder="opcional" ${ed?'':'disabled'}></label>
+    </div>
+    ${ed?`<div class="tmteam"><b>Horário da turma</b><input type="time" id="tmTin" aria-label="Entrada da turma"><span>até</span><input type="time" id="tmTout" aria-label="Saída da turma">
+      <button class="btn" id="tmApply">Aplicar pra todos</button><small>Depois é só mudar quem foi diferente.</small></div>`:''}
+    <div class="tmtablewrap"><table class="tmtable"><thead><tr><th>#</th><th>Names</th><th>Time In</th><th>Time Out</th><th title="Desconta 30 min de almoço">Almoço</th><th>Horas</th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr><td></td><td colspan="4" class="tmtotl">TMH (total de horas da turma)</td><td class="tmh" id="tmTot">${hmTxt(tmTotal(t))}</td></tr></tfoot></table></div>
+    <label class="f">Materials &amp; Equipment<textarea data-tk="materials" rows="3" ${ed?'':'disabled'}>${esc(t.materials)}</textarea></label>
+    <div class="tmsign"><p class="tmlegal">By signing below, you are acknowledging receipt of the above Time and Material description and that the work described therein was completed in a professional and satisfactory manner. You are also warranting that you have the legal authority to execute this contract on behalf of the above named company and <u>that your company is responsible for the amount due.</u></p>
+      <div class="tmgrid"><label class="f">Print Name<input data-sk="name" value="${esc(sg.name||'')}" ${ed?'':'disabled'}></label><label class="f">Title<input data-sk="title" value="${esc(sg.title||'')}" ${ed?'':'disabled'}></label></div>
+      ${ed?`<div class="tmpadwrap"><canvas id="tmPad" width="600" height="180" aria-label="Assinatura do cliente"></canvas><button class="linkbtn" id="tmPadClear">Limpar assinatura</button></div>`
+          :(sg.img?`<img class="tmsigimg" src="${esc(sg.img)}" alt="Assinatura">`:'<p class="hint">Sem assinatura do cliente.</p>')}
+      <small class="hint">Signature${t.sentAt?' · enviada '+esc(new Date(t.sentAt).toLocaleString('en-US',{month:'2-digit',day:'2-digit',hour:'numeric',minute:'2-digit'})):''}</small></div>
+    ${FIN&&t.status!=='draft'?`<div class="tmoffice"><b>For office use only</b><label class="f">Invoice #<input id="tmInv" value="${esc(t.invoice||'')}"></label>
+      <button class="btn" id="tmInvSave">${t.status==='invoiced'?'Salvar Invoice #':'Salvar e marcar como faturada'}</button></div>`:''}
+    <div class="tmbtns">${ed?`<button class="btn" id="tmSaveBtn">Salvar rascunho</button><button class="btn primary" id="tmSend">✍️ Enviar T&amp;M</button>`:''}
+      ${t.status!=='draft'?`<button class="btn" id="tmPdf">📄 Baixar PDF</button>`:''}
+      ${isAdmin&&t.status!=='draft'?`<button class="linkbtn" id="tmUnlock">Destrancar pra corrigir</button>`:''}</div>
+    <datalist id="tmWorkers">${S.workers.map(w=>`<option value="${esc(w)}">`).join('')}</datalist>`;
+  if(ed){tmPadInit(sg.img||null)}
+}
+function tmRecalc(){const t=tmCur.data;t.rows.forEach((r,i)=>{const el=$('tmh-'+i);if(el)el.textContent=tidy(r.name)?hmTxt(rowMinutes(r)):''});$('tmTot').textContent=hmTxt(tmTotal(t))}
+function tmPadInit(img){const c=$('tmPad');if(!c)return;const g=c.getContext('2d');g.lineWidth=2.5;g.lineCap='round';g.strokeStyle='#111';
+  tmSign={c,g,drawn:!!img,img};if(img){const im=new Image();im.onload=()=>g.drawImage(im,0,0,c.width,c.height);im.src=img}
+  let down=false,last=null;const pos=e=>{const r=c.getBoundingClientRect();return [(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height]};
+  c.onpointerdown=e=>{down=true;last=pos(e);c.setPointerCapture(e.pointerId);e.preventDefault()};
+  c.onpointermove=e=>{if(!down)return;const p=pos(e);g.beginPath();g.moveTo(last[0],last[1]);g.lineTo(p[0],p[1]);g.stroke();last=p;tmSign.drawn=true;tmDirty=true};
+  c.onpointerup=c.onpointercancel=()=>{if(down){down=false;tmSign.img=c.toDataURL('image/png');tmCur.data.sign=Object.assign({},tmCur.data.sign||{},{img:tmSign.img});tmSoon()}}}
+function tmSoon(){tmDirty=true;clearTimeout(tmSaveT);tmSaveT=setTimeout(()=>tmSave(true),1500)}
+function tmClean(t){const o=clone(t);o.rows=(o.rows||[]).filter(r=>tidy(r.name)).map(r=>({name:fmtName(r.name),in:r.in||'',out:r.out||'',lunch:r.lunch!==false}));
+  o.tmh=tmTotal(o);o.atMs=Date.now();o.by=(ctx&&ctx.email)||o.by||'';return o}
+async function tmSave(quiet){if(!tmCur||!tmCanEdit(tmCur.data))return;clearTimeout(tmSaveT);const id=tmCur.id,o=tmClean(tmCur.data);
+  tmDirty=false;const pr=db.doc('tm/'+id).set(o);if(!navigator.onLine){pr.catch(e=>console.error(e));if(!quiet)toast('Sem internet: guardado no aparelho, envia quando voltar');return}
+  try{await pr;if(!quiet)toast('✓ Rascunho salvo')}catch(e){console.error(e);if(tmCur&&tmCur.id===id)tmDirty=true;toast('Não consegui salvar a T&M ('+(e.code||'erro')+')')}}
+async function tmNumber(id){   // pega o próximo número (transação) e tranca a T&M
+  const res=await db.doc('counters/tm').tx(c=>({next:((c&&c.next)||1)+1}));const n=(res.next||2)-1;const no='D-'+String(n).padStart(4,'0');
+  const cur0=(await db.doc('tm/'+id).get()).data()||{};
+  await db.doc('tm/'+id).set(Object.assign(cur0,{no,status:'signed',sentAt:cur0.sentAt||Date.now(),log:(cur0.log||[]).concat([{at:Date.now(),by:(ctx&&ctx.email)||'',what:'enviada '+no}])}));return no}
+async function tmSend(){const t=tmCur.data,o=tmClean(t);
+  if(!o.rows.length){toast('Coloque pelo menos um nome');return}
+  const miss=o.rows.filter(r=>!r.in||!r.out).map(r=>r.name);if(miss.length){toast('Falta horário de: '+miss.join(', '),5000);return}
+  if(!o.company){toast('Falta o Bill To (companhia)');return}
+  const hasSig=!!(t.sign&&t.sign.img);
+  if(!confirm(`Enviar a T&M de ${o.company}?\n\n${o.rows.length} pessoa${o.rows.length>1?'s':''} · TMH ${hmTxt(o.tmh)}${hasSig?'':'\n\n⚠️ Está SEM assinatura do cliente.'}\n\nDepois de enviada ela fica trancada.`))return;
+  o.status='pending';o.sentAt=Date.now();o.log=(o.log||[]).concat([{at:Date.now(),by:o.by,what:'enviada pelo app'+(hasSig?'':' (sem assinatura)')}]);
+  const id=tmCur.id;const pr=db.doc('tm/'+id).set(o);if(navigator.onLine){try{await pr}catch(e){console.error(e);toast('Não consegui enviar ('+(e.code||'erro')+')');return}}else pr.catch(e=>console.error(e));
+  tmDirty=false;tmCur.data=o;
+  if(navigator.onLine){try{const no=await tmNumber(id);toast('✓ T&M '+no+' enviada');tmCur.data=Object.assign(o,{no,status:'signed'})}catch(e){console.error(e);toast('Enviada. O número sai quando a internet firmar.')}}
+  else toast('Sem internet: a T&M foi guardada e recebe o número quando a internet voltar.',5000);
+  tmRender()}
+async function tmFinishPending(){if(!navigator.onLine)return;try{const by=(ctx&&ctx.email)||'';if(!by)return;
+  const q=await db.collection('tm').where('status','==','pending').where('by','==',by).get();for(const d of q.docs){try{await tmNumber(d.id)}catch(e){console.error(e)}}}catch(e){}}
+window.addEventListener('online',tmFinishPending);setTimeout(tmFinishPending,4000);
+/* ---- PDF (abre a folha pronta pra imprimir / salvar em PDF) ---- */
+let tmLogo='';function tmLogoData(){if(tmLogo)return Promise.resolve(tmLogo);return new Promise(res=>{const im=new Image();im.onload=()=>{try{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);tmLogo=c.toDataURL('image/png')}catch(e){}res(tmLogo)};im.onerror=()=>res('');im.src='img/logo-mask.png'})}
+async function tmPdf(t){const rows=t.rows.slice();while(rows.length<15)rows.push({name:''});
+  const w=window.open('','_blank');if(!w){toast('O navegador bloqueou a janela do PDF. Libere pop-ups pra este site.');return}
+  w.document.write('<p style="font-family:sans-serif">Preparando o PDF…</p>');const logo=await tmLogoData();w.document.open();
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>T&M ${esc(t.no||'')} - ${esc(t.company)}</title><style>
+  @page{size:letter;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sheet{border:1.5px solid #222;padding:14px 16px}.top{display:flex;justify-content:space-between;gap:16px}.co{text-align:center;width:52%}
+  .lg{display:block;width:150px;height:98px;margin:0 auto;object-fit:contain}
+  .co p{margin:2px 0;font-weight:700}.ti{width:44%}.ti h1{font-size:22px;margin:0;text-align:center}.ti .no{text-align:center;font-size:18px;margin:2px 0 8px;font-family:"Courier New",monospace}
+  .ln{display:flex;gap:6px;margin:5px 0}.ln span{white-space:nowrap}.ln b{flex:1;border-bottom:1px solid #333;font-weight:400;min-height:15px;padding-left:4px}
+  .box{border:1px solid #333;padding:4px 8px;margin-top:6px}.box h4{margin:0;text-align:center;font-size:10px}
+  table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #333;padding:3px 6px;height:20px}th{font-weight:400}td.c{text-align:center}
+  .mat{border:1px solid #333;border-top:0;min-height:90px;padding:4px 8px;white-space:pre-wrap}.legal{font-size:10.5px;margin:10px 0}
+  .sig{display:flex;justify-content:space-between;gap:20px;margin-top:10px}.sig div{flex:1;text-align:center}.sig .v{border-bottom:1px solid #333;min-height:44px;display:flex;align-items:flex-end;justify-content:center}
+  .sig img{max-height:60px}.tot td{font-weight:700}small{color:#555}</style></head><body><div class="sheet">
+  <div class="top"><div class="co">${logo?`<img class="lg" src="${logo}" alt="Cruz Solutions">`:'<h2>CRUZ SOLUTIONS</h2>'}<p>599 Concord St, • Holliston, MA 01746</p><p>Phone: (508) 246-3219</p><p>info@cruzsolutionsinc.com</p>
+    <div class="ln" style="text-align:left"><span>Bill To:</span><b>${esc(t.company)}</b></div></div>
+   <div class="ti"><h1>Time &amp; Material</h1><div class="no">${esc(t.no||'')}</div>
+    <div class="ln"><span>Job #:</span><b>${esc(t.jobNo||'')}</b></div><div class="ln"><span>Location:</span><b>${esc(t.location||'')}</b></div>
+    <div class="box"><h4>FOR OFFICE USE ONLY:</h4><div class="ln"><span>TMH:</span><b>${esc(hmTxt(t.tmh||tmTotal(t)))} (${hDec(t.tmh||tmTotal(t))} h)</b></div><div class="ln"><span>Invoice #:</span><b>${esc(t.invoice||'')}</b></div></div></div></div>
+  <table><thead><tr><th style="width:16%">Date</th><th>Names</th><th style="width:13%">Time In</th><th style="width:13%">Time Out</th><th style="width:11%">Hours</th></tr></thead><tbody>
+  ${rows.map((r,i)=>`<tr><td class="c">${r.name?esc(t.date.slice(5).replace('-','/')+'/'+t.date.slice(2,4)):''}</td><td>${i+1}. ${esc(r.name||'')}</td><td class="c">${esc(fmt(r.in)||'')}</td><td class="c">${esc(fmt(r.out)||'')}</td><td class="c">${r.name?esc(hmTxt(rowMinutes(r))):''}</td></tr>`).join('')}
+  <tr class="tot"><td></td><td style="text-align:right">TMH (lunch 30 min deducted)</td><td></td><td></td><td class="c">${esc(hmTxt(t.tmh||tmTotal(t)))}</td></tr></tbody></table>
+  <div class="mat"><b>Materials &amp; Equipment:</b>\n${esc(t.materials||'')}</div>
+  <p class="legal">By signing below, you are acknowledging receipt of the above Time and Material description and that the work described therein was completed in a professional and satisfactory manner. You are also warranting that you have the legal authority to execute this contract on behalf of the above named company and <b><u>that your company is responsible for the amount due.</u></b></p>
+  <div class="sig"><div><div class="v">${esc((t.sign&&t.sign.title)||'')}</div>Title</div><div style="max-width:30%"><div class="v">${t.sentAt?esc(new Date(t.sentAt).toLocaleDateString('en-US')):''}</div>Date</div></div>
+  <div class="sig"><div><div class="v">${esc((t.sign&&t.sign.name)||'')}</div>Print Name</div><div style="max-width:40%"><div class="v">${t.sign&&t.sign.img?`<img src="${esc(t.sign.img)}">`:''}</div>Signature</div></div>
+  </div><small>Digital T&amp;M · Cruz Solutions Schedule</small></body></html>`);
+  w.document.close();setTimeout(()=>{try{w.focus();w.print()}catch(e){}},600)}
+/* ---- eventos do editor ---- */
+$('tmDlg').addEventListener('input',e=>{if(!tmCur)return;const t=tmCur.data,el=e.target;
+  const tr=el.closest('tr[data-ri]');if(tr&&el.dataset.tf){const r=t.rows[+tr.dataset.ri];if(!r)return;if(el.dataset.tf==='lunch')r.lunch=el.checked;else r[el.dataset.tf]=el.value;
+    if(el.dataset.tf==='name'&&+tr.dataset.ri===t.rows.length-1&&tidy(el.value)){t.rows.push({name:'',in:'',out:'',lunch:true});const tb=$('tmBody').querySelector('tbody');const i=t.rows.length-1;
+      tb.insertAdjacentHTML('beforeend',`<tr data-ri="${i}"><td class="tmn">${i+1}</td><td><input data-tf="name" list="tmWorkers" placeholder="Nome" aria-label="Nome ${i+1}"></td><td><input type="time" data-tf="in" aria-label="Entrada ${i+1}"></td><td><input type="time" data-tf="out" aria-label="Saída ${i+1}"></td><td class="tmc"><input type="checkbox" data-tf="lunch" checked aria-label="Almoço ${i+1}"></td><td class="tmh" id="tmh-${i}"></td></tr>`)}
+    tmRecalc();tmSoon();return}
+  if(el.dataset.tk){t[el.dataset.tk]=el.value;tmSoon();return}
+  if(el.dataset.sk){t.sign=Object.assign({},t.sign||{},{[el.dataset.sk]:el.value});tmSoon()}});
+$('tmDlg').addEventListener('change',e=>{if(e.target.dataset&&e.target.dataset.tf==='lunch'){const tr=e.target.closest('tr[data-ri]');tmCur.data.rows[+tr.dataset.ri].lunch=e.target.checked;tmRecalc();tmSoon()}});
+$('tmDlg').addEventListener('click',async e=>{const id=e.target.id;if(!tmCur&&id!=='tmDlg')return;
+  if(id==='tmDlg'||id==='tmClose'){tmClose();return}
+  if(id==='tmApply'){const a=$('tmTin').value,b=$('tmTout').value;if(!a||!b){toast('Coloque a entrada e a saída da turma');return}
+    tmCur.data.rows.forEach(r=>{if(tidy(r.name)){r.in=a;r.out=b}});tmDirty=true;tmRender();tmSoon();return}
+  if(id==='tmPadClear'){if(tmSign){tmSign.g.clearRect(0,0,tmSign.c.width,tmSign.c.height);tmSign.img=null;tmSign.drawn=false}tmCur.data.sign=Object.assign({},tmCur.data.sign||{},{img:null});tmSoon();return}
+  if(id==='tmSaveBtn'){tmSave(false);return}
+  if(id==='tmSend'){tmSend();return}
+  if(id==='tmPdf'){tmPdf(tmCur.data);return}
+  if(id==='tmInvSave'&&FIN){const inv=tidy($('tmInv').value);const t=TMS[tmCur.id]||tmCur.data;const o=Object.assign(clone(t),{invoice:inv,status:inv?'invoiced':'signed',log:(t.log||[]).concat([{at:Date.now(),by:(ctx&&ctx.email)||'',what:inv?'faturada · invoice '+inv:'invoice apagado'}])});
+    try{await db.doc('tm/'+tmCur.id).set(o);tmCur.data=o;tmRender();toast(inv?'✓ Marcada como faturada':'Invoice # apagado')}catch(err){console.error(err);toast('Não consegui salvar ('+(err.code||'erro')+')')}return}
+  if(id==='tmUnlock'&&isAdmin){if(!confirm('Destrancar esta T&M pra corrigir? Fica registrado no histórico dela.'))return;const t=tmCur.data;
+    const o=Object.assign(clone(t),{status:'draft',log:(t.log||[]).concat([{at:Date.now(),by:(ctx&&ctx.email)||'',what:'destrancada pra correção (número '+(t.no||'-')+' mantido)'}])});
+    try{await db.doc('tm/'+tmCur.id).set(o);tmCur.data=o;tmRender();toast('Destrancada: corrija e envie de novo')}catch(err){toast('Não consegui ('+(err.code||'erro')+')')}}});
+/* ---- aba T&M (escritório / financeiro) ---- */
+function renderTmTab(){const box=$('tmList');if(!box||$('view-tm').hidden)return;
+  const jobs=D.jobs.filter(j=>j.company||j.crew.length);
+  $('tmDay').textContent=dateBR(cur);
+  box.innerHTML=jobs.length?jobs.map(j=>{const t=TMS[tmId(cur,j.id)];
+    return `<div class="tmrow"><div><b>${esc(tidy(j.company)||'Obra')}</b> ${tmBadge(j)}<small>${esc(j.waiting?'(Esperando)':j.address)} · ${j.crew.length} pessoas${t?' · TMH '+hmTxt(t.tmh||tmTotal(t)):''}${t&&t.invoice?' · Invoice '+esc(t.invoice):''}</small></div>
+      <div class="tmrowbtn"><button class="btn" data-tmopen="${j.id}">${t?(t.status==='draft'?'Continuar':'Abrir'):'Criar T&M'}</button>${t&&t.status!=='draft'?`<button class="btn" data-tmpdf="${j.id}">PDF</button>`:''}</div></div>`}).join('')
+    :'<p class="empty">Nenhuma obra neste dia.</p>'}
+$('view-tm').addEventListener('click',e=>{const o=e.target.closest('[data-tmopen]');if(o){tmOpen(o.dataset.tmopen);return}
+  const p=e.target.closest('[data-tmpdf]');if(p){const t=TMS[tmId(cur,p.dataset.tmpdf)];if(t)tmPdf(t)}});
+if($('tab-tm')){$('tab-tm').hidden=!(P.escala||FIN);$('tab-tm').onclick=()=>{tab('tm');renderTmTab()}}
+if($('photosPanel'))$('photosPanel').addEventListener('click',e=>{const o=e.target.closest('[data-tmopen]');if(o){e.stopPropagation();tmOpen(o.dataset.tmopen)}});
 if(viewer)tab('day');
 $('date').value=cur;showWeekday();
 S=normRoster(null);

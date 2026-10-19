@@ -133,7 +133,7 @@ async function route(u) {
       <div class="gbtns"><button class="btn" data-g="reqname">Salvar nome</button><button class="btn primary" data-g="recheck">Tentar de novo</button><button class="linkbtn" data-g="out">Sair</button></div>`);
   }
   const md = m.data(), isAdmin = md.role === 'admin';
-  const perms = {}; PERMS.forEach(([k]) => perms[k] = isAdmin ? k !== 'totem' : (md.perms && k in md.perms ? !!md.perms[k] : k !== 'totem'));
+  const perms = {}; PERMS.forEach(([k]) => perms[k] = isAdmin ? k !== 'totem' : (md.perms && k in md.perms ? !!md.perms[k] : !OFF_DEFAULT.includes(k)));
   const totemOnly = !isAdmin && !!perms.totem;
   if (started) return;
   show('app');
@@ -229,19 +229,20 @@ function startDemo() {
   $('logout').textContent = 'Recomeçar'; $('logout').onclick = () => location.reload();
   $('logout2').onclick = () => location.reload();
   $('tab-access').hidden = true;
-  started = window.startApp(memDb(demoSeed()), { email: 'demo@exemplo', isAdmin: true, perms: { escala: true, apagar: true, cadastro: true, telefones: true, backup: true, fotos: true }, worker: '' });
+  started = window.startApp(memDb(demoSeed()), { email: 'demo@exemplo', isAdmin: true, perms: { escala: true, apagar: true, cadastro: true, telefones: true, backup: true, fotos: true, financeiro: true }, worker: '' });
 }
 
 /* ----- gerenciar quem tem acesso (só administrador) ----- */
-const PERMS = [['escala', 'Editar escala'], ['apagar', 'Apagar obras'], ['cadastro', 'Editar cadastro'], ['telefones', 'Telefones e avisar equipe'], ['backup', 'Baixar backup'], ['fotos', 'Ver todas as fotos'], ['totem', '🖥️ É o totem do shop (só check-in)']];
-const NEW_DEFAULT = { escala: true, apagar: false, cadastro: false, telefones: true, backup: false, fotos: false, totem: false };
+const PERMS = [['escala', 'Editar escala'], ['apagar', 'Apagar obras'], ['cadastro', 'Editar cadastro'], ['telefones', 'Telefones e avisar equipe'], ['backup', 'Baixar backup'], ['fotos', 'Ver todas as fotos'], ['financeiro', '🧾 Financeiro (T&M, horas)'], ['totem', '🖥️ É o totem do shop (só check-in)']];
+const NEW_DEFAULT = { escala: true, apagar: false, cadastro: false, telefones: true, backup: false, fotos: false, financeiro: false, totem: false };
+const OFF_DEFAULT = ['totem', 'financeiro'];  // permissões que começam DESLIGADAS quando não estão gravadas
 const permBoxes = (p, isAdm, prefix, lockAll) =>
   `<label class="perm admin"><input type="checkbox" data-adm="1" ${isAdm ? 'checked' : ''} ${lockAll ? 'disabled' : ''} id="${prefix}-admin"> Admin (tudo + acesso)</label>` +
   PERMS.map(([k, t]) => `<label class="perm"><input type="checkbox" data-perm="${k}" ${isAdm || p[k] ? 'checked' : ''} ${isAdm || lockAll ? 'disabled' : ''} id="${prefix}-${k}"> ${t}</label>`).join('');
 let WORKERS = [];
 const workerSel = (cur, id) => `<label class="wlink">É o trabalhador <select data-worker="1" id="${id}"><option value="">— ninguém (escritório) —</option>${
   [...new Set([...WORKERS, ...(cur ? [cur] : [])])].sort((a, b) => a.localeCompare(b, 'pt')).map(w => `<option${w === cur ? ' selected' : ''}>${esc(w)}</option>`).join('')}</select></label>`;
-const fullPerms = r => { const o = {}; PERMS.forEach(([k]) => o[k] = r.perms && k in r.perms ? !!r.perms[k] : k !== 'totem'); return o; };
+const fullPerms = r => { const o = {}; PERMS.forEach(([k]) => o[k] = r.perms && k in r.perms ? !!r.perms[k] : !OFF_DEFAULT.includes(k)); return o; };
 
 function setupMembers(isAdmin, me) {
   if (!isAdmin) return;

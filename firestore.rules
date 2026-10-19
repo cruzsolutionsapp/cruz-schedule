@@ -51,6 +51,20 @@ service cloud.firestore {
     function rosterOk() {
       return !('workers' in request.resource.data) || (request.resource.data.workers is list && request.resource.data.workers.size() <= 1000);
     }
+    // Financeiro (T&M e horas): tem que estar marcado de propósito (admin tem)
+    function fin() {
+      return isMember() && (member().role == 'admin' || member().get('perms', {}).get('financeiro', false) == true);
+    }
+    // T&M: só os campos certos, id = data_obra, até 60 linhas, assinatura pequena
+    function tmOk(id) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['date', 'jobId', 'site', 'company', 'location', 'jobNo', 'rows', 'materials', 'status', 'no', 'sign', 'tmh', 'driver', 'by', 'atMs', 'sentAt', 'invoice', 'log'])
+        && d.date is string && d.jobId is string && id == d.date + '_' + d.jobId
+        && d.rows is list && d.rows.size() <= 60
+        && (!('materials' in d) || (d.materials is string && d.materials.size() <= 5000))
+        && (!('log' in d) || (d.log is list && d.log.size() <= 200))
+        && (!('sign' in d) || d.sign == null || (d.sign is map && (!('img' in d.sign) || d.sign.img == null || (d.sign.img is string && d.sign.img.size() < 300000))));
+    }
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
@@ -146,6 +160,31 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['date', 'at', 'by', 'jobs', 'sent', 'drivers', 'n', 'people', 'left'])
         && request.resource.data.jobs is list && request.resource.data.jobs.size() <= 150;
       allow delete: if isAdmin();
+    }
+
+    // Time & Material digital (folha de horas da obra)
+    // Rascunho: o escritório (escala) ou o motorista da obra preenche. Depois de enviada ("signed") fica trancada:
+    // só o Financeiro mexe no Invoice # / faturada, e só o admin destranca.
+    match /tm/{id} {
+      allow read: if resource == null || fin() || can('escala')
+        || (isMember() && (resource.data.by == me() || (myWorker() != '' && resource.data.driver == myWorker())
+            || isDriverOf(resource.data.date, resource.data.jobId)));
+      allow create: if tmOk(id) && request.resource.data.status in ['draft', 'pending']
+        && (can('escala') || isDriverOf(request.resource.data.date, request.resource.data.jobId));
+      allow update: if tmOk(id) && (
+          isAdmin()
+          || (resource.data.status in ['draft', 'pending'] && request.resource.data.status in ['draft', 'pending', 'signed']
+              && (request.resource.data.status != 'signed' || (request.resource.data.no is string && request.resource.data.no.size() > 0))
+              && (can('escala') || isDriverOf(request.resource.data.date, request.resource.data.jobId)))
+          || (fin() && resource.data.status in ['signed', 'invoiced'] && request.resource.data.status in ['signed', 'invoiced']
+              && onlyChanged(['invoice', 'status', 'log'])));
+      allow delete: if isAdmin();
+    }
+    // Numeração das T&M digitais: só sobe de 1 em 1 (nunca repete)
+    match /counters/tm {
+      allow read: if isMember();
+      allow create: if isMember() && (can('escala') || myWorker() != '') && request.resource.data.keys().hasOnly(['next']) && request.resource.data.next == 2;
+      allow update: if isMember() && (can('escala') || myWorker() != '') && request.resource.data.keys().hasOnly(['next']) && request.resource.data.next == resource.data.next + 1;
     }
 
     // Escala de cada dia
