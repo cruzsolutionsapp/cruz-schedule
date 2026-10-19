@@ -1837,7 +1837,7 @@ $('tmDlg').addEventListener('click',async e=>{const id=e.target.id;if(!tmCur&&id
     const o=Object.assign(clone(t),{status:'draft',log:(t.log||[]).concat([{at:Date.now(),by:(ctx&&ctx.email)||'',what:'destrancada pra correção (número '+(t.no||'-')+' mantido)'}])});
     try{await db.doc('tm/'+tmCur.id).set(o);tmCur.data=o;tmRender();toast('Destrancada: corrija e envie de novo')}catch(err){toast('Não consegui ('+(err.code||'erro')+')')}}});
 /* ---- aba T&M (escritório / financeiro) ---- */
-function renderTmTab(){const box=$('tmList');if(!box||$('view-tm').hidden)return;
+function renderTmTab(){const box=$('tmList');if(!box||$('view-tm').hidden||$('tmPaneDay').hidden)return;
   const jobs=D.jobs.filter(j=>j.company||j.crew.length);
   $('tmDay').textContent=dateBR(cur);
   box.innerHTML=jobs.length?jobs.map(j=>{const t=TMS[tmId(cur,j.id)];
@@ -1880,6 +1880,89 @@ async function tmGoneOpen(){$('tmGoneDlg').hidden=false;document.body.classList.
 function tmGoneClose(){$('tmGoneDlg').hidden=true;if($('tmDlg').hidden)document.body.classList.remove('modal-open')}
 $('tmGoneClose').onclick=tmGoneClose;$('tmGoneDlg').addEventListener('click',e=>{if(e.target.id==='tmGoneDlg')tmGoneClose()});
 if($('tmGoneBtn')){$('tmGoneBtn').hidden=!(isAdmin||FIN);$('tmGoneBtn').onclick=tmGoneOpen}
+/* ---- ⏱ Horas por funcionário (financeiro): junta as T&M do período ---- */
+let hrsData=[],hrsOpen={},hrsBusy=0;
+const hKey=s=>tidy(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+const dAdd=(ds,n)=>{const[y,m,d]=ds.split('-').map(Number);const x=new Date(y,m-1,d+n);return iso(x)};
+const monOf=ds=>{const[y,m,d]=ds.split('-').map(Number);const x=new Date(y,m-1,d);return dAdd(ds,-((x.getDay()+6)%7))};
+const WDS=['dom','seg','ter','qua','qui','sex','sáb'];
+const wdOf=ds=>{const[y,m,d]=ds.split('-').map(Number);return WDS[new Date(y,m-1,d).getDay()]};
+const dmy=ds=>ds.slice(8,10)+'/'+ds.slice(5,7);
+function hrsSetWeek(mon){$('hrsFrom').value=mon;$('hrsTo').value=dAdd(mon,6);hrsLoad()}
+function tmSub(which){const hrs=which==='hrs'&&FIN;$('tmPaneDay').hidden=hrs;$('tmPaneHrs').hidden=!hrs;
+  $('tmSubDay').setAttribute('aria-selected',!hrs);$('tmSubHrs').setAttribute('aria-selected',hrs);
+  if(hrs){if(!$('hrsFrom').value)hrsSetWeek(monOf(iso(new Date())));else hrsLoad()}else renderTmTab()}
+async function hrsLoad(){let a=$('hrsFrom').value,b=$('hrsTo').value;if(!a||!b)return;if(a>b){[a,b]=[b,a];$('hrsFrom').value=a;$('hrsTo').value=b}
+  const my=++hrsBusy;$('hrsInfo').textContent='Carregando…';
+  try{const q=await db.collection('tm').where('date','>=',a).where('date','<=',b).get();if(my!==hrsBusy)return;
+    hrsData=q.docs.map(d=>Object.assign({_id:d.id},d.data()));hrsRender()}
+  catch(e){console.error(e);$('hrsInfo').textContent='Não consegui carregar ('+(e.code||'erro')+').'}}
+function hrsRows(){const a=$('hrsFrom').value,b=$('hrsTo').value,drafts=$('hrsDrafts').checked;const out=[];
+  hrsData.forEach(t=>{if(t.date<a||t.date>b)return;if(t.status==='draft'&&!drafts)return;
+    (t.rows||[]).forEach(r=>{if(!tidy(r.name))return;out.push({date:t.date,name:fmtName(r.name),key:hKey(r.name),company:t.company||'',location:t.location||'',jobNo:t.jobNo||'',no:t.no||'',
+      status:t.status,invoice:t.invoice||'',in:r.in||'',out:r.out||'',min:rowMinutes(r)})})});
+  return out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:x.name.localeCompare(y.name,'pt'))}
+function hrsGroup(rows){const g={};rows.forEach(r=>{const w=g[r.key]||(g[r.key]={name:r.name,key:r.key,days:{},min:0,sheets:new Set(),rows:[]});
+  w.days[r.date]=(w.days[r.date]||0)+r.min;w.min+=r.min;w.sheets.add(r.date+r.company);w.rows.push(r)});
+  return Object.values(g).sort((x,y)=>x.name.localeCompare(y.name,'pt'))}
+function hrsDays(){const a=$('hrsFrom').value,b=$('hrsTo').value,o=[];let d=a;while(d<=b&&o.length<62){o.push(d);d=dAdd(d,1)}return o}
+function hrsRender(){const rows=hrsRows(),qq=hKey($('hrsQ').value||''),all=hrsGroup(rows),ws=all.filter(w=>!qq||w.key.includes(qq));
+  const days=hrsDays(),showDays=days.length<=7,drafts=hrsData.filter(t=>t.status==='draft').length,sheets=hrsData.filter(t=>t.status!=='draft'||$('hrsDrafts').checked).length;
+  const tot=ws.reduce((s,w)=>s+w.min,0);
+  $('hrsInfo').innerHTML=`${sheets} folha${sheets===1?'':'s'} · ${ws.length} funcionário${ws.length===1?'':'s'} · <b>total ${hmTxt(tot)}</b> (${hDec(tot)} h)`+
+    (drafts&&!$('hrsDrafts').checked?` · <span class="hrswarn">⚠️ ${drafts} rascunho${drafts>1?'s':''} ainda não enviado${drafts>1?'s':''} (fora da conta)</span>`:'');
+  if(!ws.length){$('hrsTable').innerHTML='<tbody><tr><td class="empty">Nenhuma hora neste período.</td></tr></tbody>';return}
+  const head=`<thead><tr><th>Funcionário</th>${showDays?days.map(d=>`<th class="hd">${wdOf(d)}<br><small>${dmy(d)}</small></th>`).join(''):'<th class="hd">Dias</th>'}<th class="hd">Total</th><th class="hd">Decimal</th></tr></thead>`;
+  const body=ws.map(w=>{const open=hrsOpen[w.key];
+    const main=`<tr class="hrsw${open?' open':''}" data-hk="${esc(w.key)}"><td><button class="linkbtn hrsname" aria-expanded="${!!open}">${open?'▾':'▸'} ${esc(w.name)}</button></td>${showDays?days.map(d=>`<td class="hd">${w.days[d]?hmTxt(w.days[d]):'<span class="hrs0">—</span>'}</td>`).join(''):`<td class="hd">${Object.keys(w.days).length}</td>`}<td class="hd"><b>${hmTxt(w.min)}</b></td><td class="hd">${hDec(w.min)}</td></tr>`;
+    const det=open?`<tr class="hrsdet"><td colspan="${(showDays?days.length:1)+3}">${w.rows.map(r=>`<div class="hrsline"><span>${wdOf(r.date)} ${dmy(r.date)}</span><span><b>${esc(r.company)}</b>${r.location?' · '+esc(r.location):''}</span><span>${esc(fmt(r.in))}–${esc(fmt(r.out))}</span><span><b>${hmTxt(r.min)}</b></span><span class="tmb ${r.status}">${r.no?esc(r.no):tmStatusTxt[r.status]||''}</span></div>`).join('')}</td></tr>`:'';
+    return main+det}).join('');
+  const foot=`<tfoot><tr><td><b>Total</b></td>${showDays?days.map(d=>{const m=ws.reduce((s,w)=>s+(w.days[d]||0),0);return `<td class="hd">${m?hmTxt(m):''}</td>`}).join(''):'<td></td>'}<td class="hd"><b>${hmTxt(tot)}</b></td><td class="hd">${hDec(tot)}</td></tr></tfoot>`;
+  $('hrsTable').innerHTML=head+'<tbody>'+body+'</tbody>'+foot}
+async function hrsXls(){const rows=hrsRows(),qq=hKey($('hrsQ').value||'');const ws=hrsGroup(rows).filter(w=>!qq||w.key.includes(qq));
+  if(!ws.length){toast('Nenhuma hora pra baixar neste período');return}
+  const days=hrsDays(),a=$('hrsFrom').value,b=$('hrsTo').value;
+  const r2=m=>Math.round(m/60*100)/100;
+  const res=[['Horas por funcionário · '+dmy(a)+'/'+a.slice(0,4)+' a '+dmy(b)+'/'+b.slice(0,4)+' (30 min de almoço já descontados)'],[],
+    ['Funcionário',...days.map(d=>wdOf(d)+' '+dmy(d)),'Total (horas)','Total (h:mm)','Dias trabalhados']];
+  ws.forEach(w=>res.push([w.name,...days.map(d=>w.days[d]?r2(w.days[d]):''),r2(w.min),hmTxt(w.min),Object.keys(w.days).length]));
+  const tot=ws.reduce((s,w)=>s+w.min,0);res.push(['TOTAL',...days.map(d=>{const m=ws.reduce((s,w)=>s+(w.days[d]||0),0);return m?r2(m):''}),r2(tot),hmTxt(tot),'']);
+  const det=[['Data','Dia','Funcionário','Companhia (Bill To)','Local','Job #','T&M nº','Entrada','Saída','Almoço (min)','Horas','Horas (h:mm)','Status','Invoice #']];
+  ws.forEach(w=>w.rows.forEach(r=>det.push([r.date.split('-').reverse().join('/'),wdOf(r.date),r.name,r.company,r.location,r.jobNo,r.no,fmt(r.in),fmt(r.out),30,r2(r.min),hmTxt(r.min),tmStatusTxt[r.status]||r.status,r.invoice])));
+  const blob=makeXlsx([{name:'Resumo',rows:res,bold:[0,2,res.length-1],cols:[26,...days.map(()=>10),13,12,15]},
+    {name:'Detalhe',rows:det,bold:[0],cols:[11,5,24,26,30,9,9,9,9,12,8,12,10,12]}]);
+  const u=URL.createObjectURL(blob),el=document.createElement('a');el.href=u;el.download='horas_'+a+'_a_'+b+'.xlsx';document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
+  toast('✓ Excel baixado')}
+/* gerador de .xlsx próprio (sem biblioteca de fora): zip sem compressão + XML da planilha */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zipStore(files){const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+  files.forEach(([name,txt])=>{const nb=enc.encode(name),db=enc.encode(txt),crc=crc32(db);
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);h.setUint32(14,crc,true);h.setUint32(18,db.length,true);h.setUint32(22,db.length,true);h.setUint16(26,nb.length,true);
+    parts.push(h.buffer,nb,db);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint32(16,crc,true);c.setUint32(20,db.length,true);c.setUint32(24,db.length,true);c.setUint16(28,nb.length,true);c.setUint32(42,off,true);
+    cen.push(c.buffer,nb);off+=30+nb.length+db.length});
+  const cs=cen.reduce((s,x)=>s+(x.byteLength||x.length),0),e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,e.buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+function makeXlsx(sheets){const x=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
+  const col=i=>{let s='';i++;while(i){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
+  const sheetXml=sh=>`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`+
+    (sh.cols?`<cols>${sh.cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>`:'')+
+    `<sheetData>${sh.rows.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>{if(v===''||v==null)return '';const ref=col(ci)+(ri+1),st=(sh.bold||[]).includes(ri)?' s="1"':'';
+      return typeof v==='number'&&isFinite(v)?`<c r="${ref}"${st}><v>${v}</v></c>`:`<c r="${ref}"${st} t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`}).join('')}</row>`).join('')}</sheetData></worksheet>`;
+  const files=[['[Content_Types].xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`],
+    ['_rels/.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ['xl/workbook.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${x(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`],
+    ['xl/_rels/workbook.xml.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ['xl/styles.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
+    ...sheets.map((s,i)=>[`xl/worksheets/sheet${i+1}.xml`,sheetXml(s)])];
+  return zipStore(files)}
+if($('tmSubs')){$('tmSubs').hidden=!FIN;$('tmSubDay').onclick=()=>tmSub('day');$('tmSubHrs').onclick=()=>tmSub('hrs');
+  $('hrsPrev').onclick=()=>hrsSetWeek(dAdd(monOf($('hrsFrom').value||iso(new Date())),-7));
+  $('hrsNext').onclick=()=>hrsSetWeek(dAdd(monOf($('hrsFrom').value||iso(new Date())),7));
+  $('hrsThis').onclick=()=>hrsSetWeek(monOf(iso(new Date())));
+  $('hrsFrom').onchange=$('hrsTo').onchange=hrsLoad;$('hrsDrafts').onchange=hrsRender;$('hrsQ').oninput=hrsRender;$('hrsXls').onclick=hrsXls;
+  $('hrsTable').addEventListener('click',e=>{const tr=e.target.closest('tr[data-hk]');if(!tr)return;hrsOpen[tr.dataset.hk]=!hrsOpen[tr.dataset.hk];hrsRender()})}
 if(viewer)tab('day');
 $('date').value=cur;showWeekday();
 S=normRoster(null);

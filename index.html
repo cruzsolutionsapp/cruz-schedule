@@ -128,10 +128,34 @@
 
   <section id="view-tm" hidden>
     <div class="panel">
+      <div class="tmsub" role="tablist" id="tmSubs" hidden>
+        <button class="tmsubb" role="tab" id="tmSubDay" aria-selected="true">📄 Folhas do dia</button>
+        <button class="tmsubb" role="tab" id="tmSubHrs" aria-selected="false">⏱ Horas por funcionário</button>
+      </div>
+      <div id="tmPaneDay">
       <h2>🧾 Time &amp; Material · <span id="tmDay"></span></h2>
       <p class="hint">Folha de horas digital de cada obra. O motorista preenche no celular (painel "Minha obra hoje"); aqui o escritório confere, completa e baixa o PDF. Troque o dia na data lá em cima.</p>
       <div id="tmList" class="tmlist"></div>
       <button class="linkbtn" id="tmGoneBtn" hidden>🗑 Ver T&amp;M excluídas (quem, quando e por quê)</button>
+      </div>
+      <div id="tmPaneHrs" hidden>
+        <h2>⏱ Horas por funcionário</h2>
+        <div class="hrsbar">
+          <button class="icon-btn" id="hrsPrev" aria-label="Semana anterior">‹</button>
+          <label class="f">De<input type="date" id="hrsFrom"></label>
+          <label class="f">Até<input type="date" id="hrsTo"></label>
+          <button class="icon-btn" id="hrsNext" aria-label="Próxima semana">›</button>
+          <button class="btn" id="hrsThis">Esta semana</button>
+        </div>
+        <div class="hrsbar">
+          <input type="search" id="hrsQ" placeholder="Filtrar por nome" aria-label="Filtrar por nome" autocomplete="off">
+          <label class="hrschk"><input type="checkbox" id="hrsDrafts"> Contar rascunhos (ainda não enviadas)</label>
+          <button class="btn primary" id="hrsXls">⬇️ Baixar Excel</button>
+        </div>
+        <p class="hint" id="hrsInfo"></p>
+        <div class="tmtablewrap"><table class="hrstable" id="hrsTable"></table></div>
+        <p class="hint">Horas já com os 30 min de almoço descontados. Toque no nome pra ver dia a dia, obra por obra.</p>
+      </div>
     </div>
   </section>
 

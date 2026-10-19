@@ -656,3 +656,21 @@ body.viewer{padding-bottom:24px}
 /* botão Sair no topo (todo mundo) */
 .topbar .logoutbtn{display:inline-flex;align-items:center;padding:4px 10px;min-height:0;font-size:13px;font-weight:600}
 .tmatt{margin:0;font-size:13px}
+/* T&M: sub-abas e horas por funcionário */
+.tmsub{display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:8px;flex-wrap:wrap}
+.tmsubb{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;cursor:pointer}
+.tmsubb[aria-selected="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.hrsbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;margin:8px 0}
+.hrsbar label.f{min-width:140px}
+.hrsbar input[type=search]{flex:1;min-width:160px;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+.hrschk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.hrswarn{color:var(--warn);font-weight:600}
+.hrstable{width:100%;border-collapse:collapse;font-size:14px}
+.hrstable th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:left;padding:6px;border-bottom:1px solid var(--line);font-weight:700}
+.hrstable td{padding:6px;border-bottom:1px solid var(--line);vertical-align:middle}
+.hrstable .hd{text-align:right;white-space:nowrap}.hrstable th.hd{text-align:right}
+.hrstable tfoot td{border-top:2px solid var(--line);border-bottom:0}
+.hrs0{color:var(--muted)}.hrsname{font-weight:700;text-align:left;color:var(--ink);text-decoration:none}
+.hrsw.open td{background:var(--sunk)}.hrsdet td{background:var(--sunk);padding:4px 8px 10px}
+.hrsline{display:grid;grid-template-columns:80px minmax(0,1fr) 140px 60px auto;gap:8px;align-items:center;padding:4px 0;font-size:13px;border-top:1px dashed var(--line)}
+@media (max-width:560px){.hrsline{grid-template-columns:70px minmax(0,1fr) 60px;}.hrsline span:nth-child(3),.hrsline span:nth-child(5){display:none}}
