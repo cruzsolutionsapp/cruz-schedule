@@ -1417,7 +1417,7 @@ function buildReport(){
     const offs=Object.keys(OFF).map(tidy).filter(Boolean),fora=S.workers.filter(w=>!asg.has(nkey(w))&&!isOff(w)).map(tidy);
     if(fora.length||offs.length){L.push('');
       if(fora.length)L.push(`👷 *Fora do schedule* (${fora.length})`,fora.join(', '));
-      if(offs.length)L.push(`🌴 *Day off*: ${offs.join(', ')}`)}}
+      if(offs.length){if(fora.length)L.push('');L.push(`🌴 *Day off*: ${offs.join(', ')}`)}}}
   L.push('','🚚 *Saídas*');
   jobs.forEach(j=>{let t;
     if(j.left)t='saiu '+hm(j.left);
