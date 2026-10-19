@@ -2002,9 +2002,15 @@ function payDlgOpen(k,n){if(!PAY)return;payEdit={k,n};const today=iso(new Date()
   const cur=paySince(k,today);$('payRate').value='';$('payFrom').value=cur?dAdd(monOf(today),7):monOf(today);
   $('payDlgHint').textContent=cur?'Valor atual: '+money(cur.rate)+'/h. O novo entra na próxima segunda ('+dmy($('payFrom').value)+'), a não ser que você mude a data.':'Primeiro valor: já vale desde a segunda desta semana ('+dmy($('payFrom').value)+'). Mude a data se precisar.';
   const L=((PAY.rates[k])||[]).slice().sort((a,b)=>a.from<b.from?1:-1);
-  $('payHist').innerHTML=L.length?'<h4 class="phsub">Histórico</h4>'+L.map(e=>`<div class="payh"><span>${esc(e.from.split('-').reverse().join('/'))}</span><b>${money(e.rate)}/h</b><small>${esc(e.by||'')} · ${e.at?esc(new Date(e.at).toLocaleDateString('pt-BR')):''}</small></div>`).join(''):'';
+  $('payHist').innerHTML=L.length?'<h4 class="phsub">Histórico</h4>'+L.map(e=>`<div class="payh"><span>${esc(e.from.split('-').reverse().join('/'))}</span><b>${money(e.rate)}/h</b><small>${esc(e.by||'')} · ${e.at?esc(new Date(e.at).toLocaleDateString('pt-BR')):''}</small><button class="linkbtn paydel" data-paydel="${esc(e.from)}" aria-label="Apagar este valor">🗑 Apagar</button></div>`).join('')+'<p class="hint">Apagando todos, o funcionário volta a ficar sem valor.</p>':'';
   $('payDlg').hidden=false;setTimeout(()=>$('payRate').focus(),50)}
 function payDlgClose(){payEdit=null;$('payDlg').hidden=true}
+async function payDel(from){if(!payEdit||!PAY)return;const k=payEdit.k,n=payEdit.n;const e=((PAY.rates[k])||[]).find(x=>x.from===from);if(!e)return;
+  if(Date.now()>payUntil){toast('Tempo esgotado: abra os valores de novo');payLockNow();return}
+  if(!confirm(`Apagar o valor de ${n}: ${money(e.rate)}/h a partir de ${from.split('-').reverse().join('/')}?`))return;
+  try{const res=await db.doc('pay/rates').tx(d=>{const o=d||{rates:{},names:{}};o.rates=o.rates||{};const L=(o.rates[k]||[]).filter(x=>x.from!==from);if(L.length)o.rates[k]=L;else delete o.rates[k];return o});
+    PAY=res;PAY.rates=PAY.rates||{};payLog('apagou valor',{name:n,rate:e.rate,from});payDlgOpen(k,n);payRender();if(!$('tmPaneHrs').hidden)hrsRender();toast('Valor apagado')}
+  catch(err){console.error(err);toast('Não consegui apagar ('+(err.code||'erro')+')')}}
 async function paySave(){if(!payEdit||!PAY)return;const rate=Math.round(parseFloat(String($('payRate').value).replace(',','.'))*100)/100,from=$('payFrom').value;
   if(!(rate>0)||rate>1000){toast('Coloque um valor válido (ex.: 25.00)');return}if(!/^\d{4}-\d\d-\d\d$/.test(from)){toast('Escolha a data');return}
   if(Date.now()>payUntil){toast('Tempo esgotado: abra os valores de novo');payLockNow();return}
@@ -2016,7 +2022,7 @@ async function paySave(){if(!payEdit||!PAY)return;const rate=Math.round(parseFlo
   catch(e){console.error(e);toast('Não consegui salvar ('+(e.code||'erro')+')')}}
 if($('payPanel')){payRender();$('payOpen').onclick=()=>payUnlock($('payPwd').value,$('payMsg'));$('payPwd').addEventListener('keydown',e=>{if(e.key==='Enter')$('payOpen').click()});
   $('payLock').onclick=payLockNow;$('payQ').oninput=payRender;$('payList').addEventListener('click',e=>{const b=e.target.closest('[data-payk]');if(b)payDlgOpen(b.dataset.payk,b.dataset.payn)});
-  $('payDlgClose').onclick=payDlgClose;$('paySave').onclick=paySave;$('payDlg').addEventListener('click',e=>{if(e.target.id==='payDlg')payDlgClose()})}
+  $('payDlgClose').onclick=payDlgClose;$('payHist').addEventListener('click',e=>{const b=e.target.closest('[data-paydel]');if(b)payDel(b.dataset.paydel)});$('paySave').onclick=paySave;$('payDlg').addEventListener('click',e=>{if(e.target.id==='payDlg')payDlgClose()})}
 if(viewer)tab('day');
 $('date').value=cur;showWeekday();
 S=normRoster(null);

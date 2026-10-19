@@ -684,3 +684,4 @@ body.viewer{padding-bottom:24px}
 .payrow small{display:block;color:var(--muted);margin-top:2px}
 .paysince{color:var(--muted)}.paynext{color:var(--ok);font-weight:600}.paymiss{color:var(--warn);font-weight:700}
 .payh{display:flex;gap:10px;align-items:baseline;font-size:13px;padding:3px 0;border-top:1px dashed var(--line)}.payh small{color:var(--muted)}
+.payh .paydel{margin-left:auto;font-size:12px;color:var(--bad)}
