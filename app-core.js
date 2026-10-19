@@ -110,7 +110,7 @@ function normRoster(d){return {workers:Array.isArray(d&&d.workers)?[...d.workers
   drivers:Array.isArray(d&&d.drivers)?d.drivers.filter(x=>typeof x==='string'):[],
   offices:(d&&d.offices&&typeof d.offices==='object')?{...d.offices}:{},
   boss:(d&&typeof d.boss==='string')?d.boss:''}}
-function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.forEach(j=>{j.id=j.id||nid();j.need=+j.need||0;delete j.calc;j.travel=Number.isFinite(j.travel)?j.travel:null;j.autoShop=!!j.autoShop;j.early=Number.isFinite(j.early)?j.early:30;j.tk=j.tk||'';j.crew=Array.isArray(j.crew)?j.crew:[];['company','address','attire','shop','start','note'].forEach(k=>j[k]=j[k]||'');j.allWeek=!!j.allWeek;j.waiting=!!j.waiting;j.office=!!j.office;j.left=Number.isFinite(j.left)?j.left:0});return {date:cur,jobs,sent:(d&&d.sent&&typeof d.sent==='object')?{...d.sent}:{}}}
+function normDay(d){const jobs=Array.isArray(d&&d.jobs)?clone(d.jobs):[];jobs.forEach(j=>{j.id=j.id||nid();j.need=+j.need||0;delete j.calc;j.travel=Number.isFinite(j.travel)?j.travel:null;j.autoShop=!!j.autoShop;j.early=Number.isFinite(j.early)?j.early:30;j.tk=j.tk||'';j.crew=Array.isArray(j.crew)?j.crew:[];['company','address','attire','shop','start','note'].forEach(k=>j[k]=j[k]||'');j.allWeek=!!j.allWeek;j.allWeekWk=!!(j.allWeek&&j.allWeekWk);j.waiting=!!j.waiting;j.office=!!j.office;j.left=Number.isFinite(j.left)?j.left:0});return {date:cur,jobs,sent:(d&&d.sent&&typeof d.sent==='object')?{...d.sent}:{}}}
 
 /* evita re-render enquanto a pessoa digita */
 function typing(){const a=document.activeElement;return a&&(a.tagName==='INPUT'||a.tagName==='SELECT')&&!a.id.startsWith('extra-')&&a.id!=='newWorker'}
@@ -435,7 +435,8 @@ function renderJobs(){
         </div>
         <div class="shopnote" id="sn-${j.id}">${shopNote(j)}</div>
         <label class="f">Observação<input data-f="note" value="${esc(j.note)}" placeholder="Ex.: Levar Roupa" id="nt-${j.id}"></label>
-        <label class="check wk"><input type="checkbox" data-f="allWeek" ${j.allWeek?'checked':''} id="aw-${j.id}"> Semana toda <span class="tag">(All Week)</span></label>
+        <div class="wkrow"><label class="check wk"><input type="checkbox" data-f="allWeek" ${j.allWeek?'checked':''} id="aw-${j.id}"> Semana toda <span class="tag">(All Week)</span></label>
+        <label class="check wk wkend"${j.allWeek?'':' hidden'}><input type="checkbox" data-f="allWeekWk" ${j.allWeekWk?'checked':''} id="awk-${j.id}"> incluir sábado e domingo</label></div>
         <div class="crew">
           <h3><span>Equipe</span><span class="need ${needCls(j)}" id="nd-${j.id}">${needText(j)}</span></h3>
           <label class="needrow">Preciso de <input type="number" min="0" max="99" inputmode="numeric" data-f="need" value="${j.need||''}" placeholder="–" id="nq-${j.id}"> pessoas</label>
@@ -444,7 +445,7 @@ function renderJobs(){
           ${picker||`<button class="btn" data-act="pickopen">+ Adicionar pessoas</button>`}
         </div>
         ${P.fotos?`<button class="btn phcount" data-act="photos">📷 Fotos da obra <b id="pc-${j.id}">${photoCount(j)}</b></button>`:''}
-        <div class="jobactions"><button class="btn" data-act="copynext">📋 Copiar pro dia seguinte</button>
+        <div class="jobactions"><button class="btn" data-act="copynext">📋 Copiar pra ${shortWD(nextDayFor(j))}</button>
         <button class="btn danger" data-act="del">${confirmDel===j.id?'Toque de novo pra apagar':'Apagar obra'}</button></div>
       </div></article>`;
   }).join('')+(P.escala?'<button class="btn addend" id="addJobEnd">+ Nova obra</button>':''):'<div class="panel empty">Nenhuma obra neste dia. Toque em "+ Nova obra" ou "Copiar último dia".</div>';
@@ -493,7 +494,9 @@ $('jobs').addEventListener('input',e=>{
       if(!off){toast('Digite o endereço do office'+(j.company?' da '+j.company:'')+'. Fica salvo pras próximas vezes');ad.focus()}}
     else{j.address=j.prevAddr||'';delete j.prevAddr;ad.value=j.address;ad.placeholder='Rua, cidade, MA'}
     const ap=$('ap-'+j.id);if(ap)ap.innerHTML=addrPickHTML(j)}
-  else if(f==='allWeek'){j.allWeek=e.target.checked;const t=card.querySelector('.wkbadge');if(t)t.hidden=!j.allWeek}
+  else if(f==='allWeek'){j.allWeek=e.target.checked;if(!j.allWeek)j.allWeekWk=false;const t=card.querySelector('.wkbadge');if(t)t.hidden=!j.allWeek;const w=card.querySelector('.wkend');if(w){w.hidden=!j.allWeek;w.querySelector('input').checked=!!j.allWeekWk}}
+  else if(f==='allWeekWk'){j.allWeekWk=e.target.checked}
+  if(f==='allWeek'||f==='allWeekWk'){const cb=card.querySelector('[data-act="copynext"]');if(cb)cb.textContent='📋 Copiar pra '+shortWD(nextDayFor(j))}
   else if(f==='need'){j.need=Math.max(0,Math.min(99,parseInt(e.target.value,10)||0));const el=$('nd-'+j.id);el.className='need '+needCls(j);el.textContent=needText(j)}
   else if(f==='travel'){const v=parseInt(e.target.value,10);j.travel=Number.isFinite(v)&&v>=0?v:null;
     if(j.travel!=null&&j.address.trim()){S.travel[akey(j.address.trim())]=j.travel;j.tk=akey(j.address.trim());saveRoster()}
@@ -568,8 +571,12 @@ async function addJobTo(ds,nj){const path=dayPath(ds);
   const sn=await db.doc(path).get();const nd=go(sn.exists?sn.data():null);if(nd)await db.doc(path).set(nd)}
 // src = id da obra original (a cópia guarda de onde veio), pra saber se é a MESMA turma ou outra turma no mesmo endereço
 const srcOf=x=>x.src||x.id;
+// próximo dia de trabalho da obra: pula sábado/domingo, a não ser que ela trabalhe no fim de semana
+function nextDayFor(j,from){const [y,m,d]=(from||cur).split('-').map(Number);let dt=new Date(y,m-1,d+1);
+  if(!j.allWeekWk)while(dt.getDay()===0||dt.getDay()===6)dt=new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()+1);return iso(dt)}
+const shortWD=ds=>{const [y,m,d]=ds.split('-').map(Number);return ['domingo','segunda','terça','quarta','quinta','sexta','sábado'][new Date(y,m-1,d).getDay()]};
 async function copyJobToNext(j,btn,auto){
-  const [y,m,d]=cur.split('-').map(Number);const next=iso(new Date(y,m-1,d+1));
+  const next=nextDayFor(j);
   const nice=dateBR(next);btn.disabled=true;
   try{
     const snap=await db.doc(dayPath(next)).get();const day=snap.exists?snap.data():{date:next,jobs:[],sent:{}};
@@ -593,19 +600,33 @@ async function copyJobToNext(j,btn,auto){
 $('addJob').onclick=()=>{if(!dayLoaded)return;const j={id:nid(),company:'',address:'',waiting:false,attire:ATTIRE,shop:'',start:'07:00',crew:[],need:0,travel:null,autoShop:true,tk:'',early:30};D.jobs.push(j);openPick=j.id;saveDay();renderJobs();const card=document.querySelector('.job[data-id="'+j.id+'"]');if(card)card.scrollIntoView({block:'start',behavior:'smooth'});const el=$('co-'+j.id);if(el)el.focus({preventScroll:true})};
 $('addJob2').onclick=()=>$('addJob').click();
 document.addEventListener('click',e=>{if(e.target.id==='addJobEnd')$('addJob').click()});
+// "Copiar último dia": abre a lista das obras do último dia com escala (ex.: sexta, numa segunda) e copia só as marcadas
+let CPV={date:null,jobs:[]};
 $('copyPrev').onclick=async()=>{
   if(!dayLoaded)return;
   let prev=null,jobs=null;
-  try{
-    if(db){const q=await db.collection('days').where('date','<',cur).orderBy('date','desc').limit(20).get();
-      const d=q.docs.find(x=>{const b=x.data();return b&&Array.isArray(b.jobs)&&b.jobs.length});if(d){prev=d.id;jobs=d.data().jobs}}
-    else{const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k.startsWith(LKEY+'days/'))keys.push(k.slice((LKEY+'days/').length))}
-      keys.filter(k=>k<cur).sort().reverse().some(k=>{const b=JSON.parse(localStorage.getItem(LKEY+'days/'+k));if(b&&b.jobs&&b.jobs.length){prev=k;jobs=b.jobs;return true}})}
-  }catch(e){toast('Não consegui buscar o dia anterior');return}
+  try{const q=await db.collection('days').where('date','<',cur).orderBy('date','desc').limit(20).get();
+    const d=q.docs.find(x=>{const b=x.data();return b&&Array.isArray(b.jobs)&&b.jobs.length});if(d){prev=d.id;jobs=d.data().jobs}}
+  catch(e){toast('Não consegui buscar o dia anterior');return}
   if(!prev){toast('Nenhum dia anterior salvo');return}
-  D.jobs=clone(jobs).map(j=>({...j,id:nid(),left:0}));D.sent={};saveDay();renderJobs();
-  toast('Copiado de '+prev.split('-').reverse().join('/'));
+  CPV={date:prev,jobs};const have=new Set(D.jobs.map(srcOf));
+  $('cpTitle').textContent='Copiar de '+WD[new Date(prev+'T12:00:00').getDay()].toLowerCase()+' '+prev.split('-').reverse().slice(0,2).join('/');
+  $('cpList').innerHTML=jobs.map((j,i)=>{const already=have.has(srcOf(j));
+    return `<label class="cprow${already?' dis':''}"><input type="checkbox" data-cp="${i}" ${already?'disabled':'checked'}>
+      <span><b>${esc(j.company||'Obra')}</b>${j.allWeek?' <span class="wkbadge">All Week</span>':''}${already?' <span class="cpalready">já está neste dia</span>':''}
+      <small>${esc(j.waiting||!j.address?'(Esperando)':j.address)} · ${(j.crew||[]).length} pessoa${(j.crew||[]).length===1?'':'s'}</small></span></label>`}).join('');
+  $('copyDlg').hidden=false;document.body.classList.add('modal-open');
 };
+function closeCopy(){$('copyDlg').hidden=true;document.body.classList.remove('modal-open')}
+$('copyDlg').addEventListener('click',e=>{
+  if(e.target.id==='copyDlg'||e.target.id==='cpClose'){closeCopy();return}
+  if(e.target.id==='cpAll'||e.target.id==='cpNone'){const on=e.target.id==='cpAll';$('cpList').querySelectorAll('input[data-cp]:not(:disabled)').forEach(c=>c.checked=on);return}
+  if(e.target.id!=='cpGo')return;
+  const pick=[...$('cpList').querySelectorAll('input[data-cp]:checked')].map(c=>CPV.jobs[+c.dataset.cp]).filter(Boolean);
+  if(!pick.length){toast('Marque pelo menos uma obra');return}
+  pick.forEach(j=>{const {calc,prevAddr,left,...rest}=clone(j);D.jobs.push(Object.assign(rest,{id:nid(),src:srcOf(j),left:0}))});
+  saveDay();renderJobs();closeCopy();toast(`✓ ${pick.length} obra${pick.length>1?'s':''} copiada${pick.length>1?'s':''}`);
+});
 $('bringWeek').onclick=async()=>{
   if(!dayLoaded)return;
   const [y,m,d]=cur.split('-').map(Number);const dt=new Date(y,m-1,d);const dow=(dt.getDay()+6)%7; // segunda = 0
@@ -709,7 +730,9 @@ $('alerts').parentElement.addEventListener('click',e=>{if(e.target.id==='openTv'
   if(e.target.id==='collapseAll'||e.target.id==='expandAll'){const open=e.target.id==='expandAll';D.jobs.forEach(j=>openLeft.set(j.id,open));renderJobs();return}if(e.target.id==='openHist')openHist();if(e.target.id==='openImp'){openHist();const d=$('impBox');d.open=true;setTimeout(()=>$('impMsg').focus(),100)}});
 $('histDlg').addEventListener('click',e=>{if(e.target.id==='impPrev')impPreview();else if(e.target.id==='impAdd')impApply('add');else if(e.target.id==='impReplace')impApply('replace')});
 /* ---------- data ---------- */
-function setDate(d){flushAll();cur=d;$('date').value=d;openPick=null;confirmDel=null;confirmClear=false;$('clearDay').textContent='Limpar dia';watchDay()}
+const WD=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+function showWeekday(){const el=$('dateWeek');if(!el)return;const[y,m,d]=cur.split('-').map(Number);el.textContent=WD[new Date(y,m-1,d).getDay()]+(cur===iso(new Date())?' · hoje':'')}
+function setDate(d){flushAll();cur=d;$('date').value=d;showWeekday();openPick=null;confirmDel=null;confirmClear=false;$('clearDay').textContent='Limpar dia';watchDay()}
 $('date').onchange=e=>{if(e.target.value)setDate(e.target.value)};
 const shift=n=>{const[y,m,d]=cur.split('-').map(Number);setDate(iso(new Date(y,m-1,d+n)))};
 $('prevDay').onclick=()=>shift(-1);$('nextDay').onclick=()=>shift(1);
@@ -1627,7 +1650,7 @@ if(viewer)$('tab-search').hidden=true;
   try{new MutationObserver(align).observe(row,{attributes:true,subtree:true,attributeFilter:['hidden']})}catch(e){}
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(align);setTimeout(align,300);align()})();
 if(viewer)tab('day');
-$('date').value=cur;
+$('date').value=cur;showWeekday();
 S=normRoster(null);
 setStatus('loading');renderJobs();renderRoster();
 db.doc(ROSTER).onSnapshot(remoteRoster,e=>{console.error(e);setStatus('err')});

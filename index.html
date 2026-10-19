@@ -49,7 +49,7 @@
     <button class="btn viewer-only" id="logout2">Sair</button>
     <div class="datebar">
       <button class="icon-btn" id="prevDay" aria-label="Dia anterior">‹</button>
-      <input type="date" id="date" aria-label="Data do schedule">
+      <div class="datewrap"><input type="date" id="date" aria-label="Data do schedule"><span class="dateweek" id="dateWeek"></span></div>
       <button class="icon-btn" id="nextDay" aria-label="Próximo dia">›</button>
     </div>
   </header>
@@ -324,6 +324,14 @@
       <button class="btn" id="impPrev">Ver o que vai entrar</button>
       <div id="impOut"></div>
     </details>
+  </div>
+</div>
+<div class="modal" id="copyDlg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cpTitle">
+    <div class="sheethead"><h2 id="cpTitle">Copiar obras</h2><button class="icon-btn" id="cpClose" aria-label="Fechar">×</button></div>
+    <p class="hint">Marque as obras que vão se repetir neste dia. <button class="linkbtn" id="cpAll">Marcar todas</button> · <button class="linkbtn" id="cpNone">Desmarcar todas</button></p>
+    <div id="cpList" class="cplist"></div>
+    <button class="btn primary" id="cpGo" style="margin-top:10px">Copiar as marcadas</button>
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>

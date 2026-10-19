@@ -597,3 +597,15 @@ body.viewer{padding-bottom:24px}
 .toolsbar{position:sticky;top:var(--topH,0px);z-index:3;background:var(--bg);padding:6px 0 4px;margin-bottom:6px}
 .toolsbar:empty{display:none}
 .toolsbar .histlinks{row-gap:2px}
+/* dia da semana embaixo da data */
+.datewrap{display:flex;flex-direction:column;align-items:center;gap:1px}
+.dateweek{font-size:12px;font-weight:700;color:var(--hivis);text-transform:uppercase;letter-spacing:.04em;line-height:1.1}
+.wkrow{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
+.wkend{font-size:.92em;color:var(--muted)}
+/* copiar obras do último dia */
+.cplist{display:flex;flex-direction:column;gap:6px}
+.cprow{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer}
+.cprow input{margin-top:3px;width:18px;height:18px}
+.cprow small{display:block;color:var(--muted)}
+.cprow.dis{opacity:.55;cursor:default}
+.cpalready{font-size:12px;color:var(--ok);font-weight:700}
