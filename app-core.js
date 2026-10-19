@@ -597,7 +597,7 @@ async function copyJobToNext(j,btn,auto){
 }
 
 /* ---------- barra de ferramentas ---------- */
-$('addJob').onclick=()=>{if(!dayLoaded)return;const j={id:nid(),company:'',address:'',waiting:false,attire:ATTIRE,shop:'',start:'07:00',crew:[],need:0,travel:null,autoShop:true,tk:'',early:30};D.jobs.push(j);openPick=j.id;saveDay();renderJobs();const card=document.querySelector('.job[data-id="'+j.id+'"]');if(card)card.scrollIntoView({block:'start',behavior:'smooth'});const el=$('co-'+j.id);if(el)el.focus({preventScroll:true})};
+$('addJob').onclick=()=>{if(!dayLoaded)return;const j={id:nid(),company:'',address:'',waiting:false,attire:ATTIRE,shop:'',start:'07:00',crew:[],need:0,travel:null,autoShop:true,tk:'',early:0};D.jobs.push(j);openPick=j.id;saveDay();renderJobs();const card=document.querySelector('.job[data-id="'+j.id+'"]');if(card)card.scrollIntoView({block:'start',behavior:'smooth'});const el=$('co-'+j.id);if(el)el.focus({preventScroll:true})};
 $('addJob2').onclick=()=>$('addJob').click();
 document.addEventListener('click',e=>{if(e.target.id==='addJobEnd')$('addJob').click()});
 // "Copiar último dia": abre a lista das obras do último dia com escala (ex.: sexta, numa segunda) e copia só as marcadas
@@ -681,7 +681,7 @@ function to24(t){const m=String(t||'').trim().toLowerCase().match(/^(\d{1,2})(?:
 function parseMsg(txt){
   const out=[];const blocks=String(txt||'').replace(/\r/g,'').split(/\n\s*_{2,}\s*(?=\n|$)/);
   blocks.forEach(b=>{const lines=b.split('\n');const i=lines.findIndex(l=>/^\s*✅/.test(l));if(i<0)return;
-    const j={id:nid(),company:fmtCompany(lines[i].replace(/^\s*✅\s*/,'')),address:'',waiting:false,office:false,attire:'',shop:'',start:'',early:30,travel:null,autoShop:false,tk:'',need:0,note:'',allWeek:false,crew:[],left:0};
+    const j={id:nid(),company:fmtCompany(lines[i].replace(/^\s*✅\s*/,'')),address:'',waiting:false,office:false,attire:'',shop:'',start:'',early:0,travel:null,autoShop:false,tk:'',need:0,note:'',allWeek:false,crew:[],left:0};
     let gotAddr=false;
     lines.slice(i+1).forEach(raw=>{const l=raw.trim();if(!l)return;
       if(/^✓/.test(l)){let r=l.replace(/^✓\s*/,'');let v='';
@@ -729,6 +729,11 @@ $('alerts').parentElement.addEventListener('click',e=>{if(e.target.id==='openTv'
     const ms=new Date(cur+'T'+hh+':00').getTime();pend.forEach(j=>{j.left=ms;openLeft.delete(j.id)});saveDay();pend.filter(j=>j.allWeek).forEach(j=>copyJobToNext(j,{},true));renderJobs();renderCentral();toast(`✓ ${pend.length} obra${pend.length>1?'s':''} despachada${pend.length>1?'s':''} às ${fmt(hh)}`);return}
   if(e.target.id==='collapseAll'||e.target.id==='expandAll'){const open=e.target.id==='expandAll';D.jobs.forEach(j=>openLeft.set(j.id,open));renderJobs();return}if(e.target.id==='openHist')openHist();if(e.target.id==='openImp'){openHist();const d=$('impBox');d.open=true;setTimeout(()=>$('impMsg').focus(),100)}});
 $('histDlg').addEventListener('click',e=>{if(e.target.id==='impPrev')impPreview();else if(e.target.id==='impAdd')impApply('add');else if(e.target.id==='impReplace')impApply('replace')});
+// Horário vazio: abre o relógio já em AM (6:00 no shop, 7:00 no start) em vez da hora atual (à tarde = PM)
+document.addEventListener('focusin',e=>{const t=e.target;if(!t||t.type!=='time'||t.value)return;t.value=t.dataset.f==='shop'?'06:00':'07:00';t.dataset.prefill='1'},true);
+document.addEventListener('input',e=>{const t=e.target;if(t&&t.type==='time')delete t.dataset.prefill},true);
+document.addEventListener('change',e=>{const t=e.target;if(t&&t.type==='time')delete t.dataset.prefill},true);
+document.addEventListener('focusout',e=>{const t=e.target;if(t&&t.type==='time'&&t.dataset.prefill){t.value='';delete t.dataset.prefill}},true);
 /* ---------- data ---------- */
 const WD=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
 function showWeekday(){const el=$('dateWeek');if(!el)return;const[y,m,d]=cur.split('-').map(Number);el.textContent=WD[new Date(y,m-1,d).getDay()]+(cur===iso(new Date())?' · hoje':'')}
@@ -1505,7 +1510,7 @@ function cdCheck(){
 }
 function newBooking(date){
   const co=fmtCompany($('cdCo').value),addr=fmtAddress($('cdAddr').value),start=$('cdStart').value||'07:00',need=Math.max(0,Math.min(99,parseInt($('cdNeed').value,10)||0));
-  const key=addr?akey(addr):'',travel=key&&S.travel[key]!=null?S.travel[key]:null,early=30;
+  const key=addr?akey(addr):'',travel=key&&S.travel[key]!=null?S.travel[key]:null,early=0;
   const j={id:nid(),company:co,address:addr,waiting:!addr,office:false,attire:ATTIRE,shop:'',start,early,travel,autoShop:true,tk:travel!=null?key:'',need,note:tidy($('cdNote').value),allWeek:$('cdAllWeek').checked,crew:[],left:0};
   if(travel!=null)j.shop=toHHMM(Math.floor((toMin(start)-early-travel)/5)*5);
   return j;
