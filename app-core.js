@@ -730,7 +730,8 @@ $('alerts').parentElement.addEventListener('click',e=>{if(e.target.id==='openTv'
   if(e.target.id==='collapseAll'||e.target.id==='expandAll'){const open=e.target.id==='expandAll';D.jobs.forEach(j=>openLeft.set(j.id,open));renderJobs();return}if(e.target.id==='openHist')openHist();if(e.target.id==='openImp'){openHist();const d=$('impBox');d.open=true;setTimeout(()=>$('impMsg').focus(),100)}});
 $('histDlg').addEventListener('click',e=>{if(e.target.id==='impPrev')impPreview();else if(e.target.id==='impAdd')impApply('add');else if(e.target.id==='impReplace')impApply('replace')});
 // Horário vazio: abre o relógio já em AM (6:00 no shop, 7:00 no start) em vez da hora atual (à tarde = PM)
-document.addEventListener('focusin',e=>{const t=e.target;if(!t||t.type!=='time'||t.value)return;t.value=t.dataset.f==='shop'?'06:00':'07:00';t.dataset.prefill='1'},true);
+const amFill=e=>{const t=e.target;if(!t||t.type!=='time'||t.value)return;t.value=t.dataset.f==='shop'?'06:00':'07:00';t.dataset.prefill='1'};
+['pointerdown','touchstart','mousedown','focusin'].forEach(ev=>document.addEventListener(ev,amFill,{capture:true,passive:true}));   // antes do celular abrir o relógio
 document.addEventListener('input',e=>{const t=e.target;if(t&&t.type==='time')delete t.dataset.prefill},true);
 document.addEventListener('change',e=>{const t=e.target;if(t&&t.type==='time')delete t.dataset.prefill},true);
 document.addEventListener('focusout',e=>{const t=e.target;if(t&&t.type==='time'&&t.dataset.prefill){t.value='';delete t.dataset.prefill}},true);
