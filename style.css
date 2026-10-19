@@ -645,12 +645,10 @@ body.viewer{padding-bottom:24px}
 @media (max-width:560px){
   .tmlogo small{display:none}.tmtitle b{font-size:17px}
   .tmtable thead{display:none}.tmtable,.tmtable tbody,.tmtable tfoot{display:block}
-  .tmtable tbody tr{display:grid;grid-template-columns:22px minmax(0,1fr) minmax(0,1fr) auto auto;gap:4px 6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+  .tmtable tbody tr{display:grid;grid-template-columns:22px minmax(0,1fr) minmax(0,1fr) auto;gap:4px 6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
   .tmtable tbody td{border:0;padding:0}
   .tmtable tbody td:nth-child(2){grid-column:2 / -1}
   .tmtable tbody td:nth-child(3){grid-column:2}
-  .tmtable tbody td:nth-child(5)::before{content:'almoço ';font-size:10px;color:var(--muted)}
-  .tmtable tbody td:nth-child(5){display:flex;align-items:center;gap:2px}
   .tmtable input[type=time]{min-width:0}
   .tmtable tfoot tr{display:flex;justify-content:space-between;padding:8px 0}.tmtable tfoot td{border:0}.tmtable tfoot td:first-child{display:none}
 }

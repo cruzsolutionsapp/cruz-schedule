@@ -1660,13 +1660,13 @@ if(viewer)$('tab-search').hidden=true;
 /* ===================== TIME & MATERIAL digital (folha de ponto) =====================
    tm/{data}_{jobId}: {date, jobId, site, company, location, jobNo, rows[{name,in,out,lunch}], materials,
      status:'draft'|'pending'|'signed'|'invoiced', no:'D-0001', sign{name,title,img}, tmh(min), driver, by, atMs, sentAt, invoice, log[]}
-   Número: counters/tm {next} (transação, nunca repete). Horas: (saída−entrada) − 30 min de almoço (se marcado);
+   Número: counters/tm {next} (transação, nunca repete). Horas: (saída−entrada) − 30 min de almoço (todos tiram, sempre desconta);
    arredonda pra hora cheia só quando faltam menos de 5 min (7h56 → 8h00). */
 const FIN=!!(P.financeiro||isAdmin);
 const TMS={};let tmUnsub=null,tmDocUnsubs=[],tmCur=null,tmDirty=false,tmSaveT=null,tmSign=null;
 const tmId=(date,jobId)=>date+'_'+jobId;
 const tmMin=t=>{if(!t||!/^\d{1,2}:\d{2}$/.test(t))return null;const[h,m]=t.split(':').map(Number);return h*60+m};
-function rowMinutes(r){const a=tmMin(r.in),b=tmMin(r.out);if(a==null||b==null)return 0;let m=b-a;if(m<0)m+=1440;if(r.lunch!==false&&m>30)m-=30;
+function rowMinutes(r){const a=tmMin(r.in),b=tmMin(r.out);if(a==null||b==null)return 0;let m=b-a;if(m<0)m+=1440;if(m>30)m-=30;
   const rem=m%60;if(rem>=56)m+=60-rem;return m}
 const hmTxt=m=>m?Math.floor(m/60)+'h'+String(m%60).padStart(2,'0'):'—';
 const hDec=m=>(m/60).toFixed(2);
@@ -1698,7 +1698,6 @@ function tmRender(){if(!tmCur)return;const t=tmCur.data,ed=tmCanEdit(t);
     <td>${ed?`<input data-tf="name" value="${esc(r.name)}" list="tmWorkers" placeholder="Nome" aria-label="Nome ${i+1}">`:esc(r.name)}</td>
     <td>${ed?`<input type="time" data-tf="in" value="${esc(r.in)}" aria-label="Entrada ${i+1}">`:esc(fmt(r.in)||'—')}</td>
     <td>${ed?`<input type="time" data-tf="out" value="${esc(r.out)}" aria-label="Saída ${i+1}">`:esc(fmt(r.out)||'—')}</td>
-    <td class="tmc">${ed?`<input type="checkbox" data-tf="lunch" ${r.lunch!==false?'checked':''} aria-label="Almoço ${i+1}">`:(r.lunch!==false?'✓':'—')}</td>
     <td class="tmh" id="tmh-${i}">${tidy(r.name)?hmTxt(m):''}</td></tr>`}).join('');
   const sg=t.sign||{};
   $('tmBody').innerHTML=`<div class="tmhead"><div class="tmlogo"><div class="logo" role="img" aria-label="Cruz Solutions"></div><small>599 Concord St · Holliston, MA 01746<br>(508) 246-3219</small></div>
@@ -1711,8 +1710,8 @@ function tmRender(){if(!tmCur)return;const t=tmCur.data,ed=tmCanEdit(t);
     </div>
     ${ed?`<div class="tmteam"><b>Horário da turma</b><input type="time" id="tmTin" aria-label="Entrada da turma"><span>até</span><input type="time" id="tmTout" aria-label="Saída da turma">
       <button class="btn" id="tmApply">Aplicar pra todos</button><small>Depois é só mudar quem foi diferente.</small></div>`:''}
-    <div class="tmtablewrap"><table class="tmtable"><thead><tr><th>#</th><th>Names</th><th>Time In</th><th>Time Out</th><th title="Desconta 30 min de almoço">Almoço</th><th>Horas</th></tr></thead><tbody>${rows}</tbody>
-      <tfoot><tr><td></td><td colspan="4" class="tmtotl">TMH (total de horas da turma)</td><td class="tmh" id="tmTot">${hmTxt(tmTotal(t))}</td></tr></tfoot></table></div>
+    <div class="tmtablewrap"><table class="tmtable"><thead><tr><th>#</th><th>Names</th><th>Time In</th><th>Time Out</th><th title="Já descontado 30 min de almoço">Horas</th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr><td></td><td colspan="3" class="tmtotl">TMH (total da turma · já descontado 30 min de almoço de cada um)</td><td class="tmh" id="tmTot">${hmTxt(tmTotal(t))}</td></tr></tfoot></table></div>
     <label class="f">Materials &amp; Equipment<textarea data-tk="materials" rows="3" ${ed?'':'disabled'}>${esc(t.materials)}</textarea></label>
     <div class="tmsign"><p class="tmlegal">By signing below, you are acknowledging receipt of the above Time and Material description and that the work described therein was completed in a professional and satisfactory manner. You are also warranting that you have the legal authority to execute this contract on behalf of the above named company and <u>that your company is responsible for the amount due.</u></p>
       <div class="tmgrid"><label class="f">Print Name<input data-sk="name" value="${esc(sg.name||'')}" ${ed?'':'disabled'}></label><label class="f">Title<input data-sk="title" value="${esc(sg.title||'')}" ${ed?'':'disabled'}></label></div>
@@ -1735,7 +1734,7 @@ function tmPadInit(img){const c=$('tmPad');if(!c)return;const g=c.getContext('2d
   c.onpointermove=e=>{if(!down)return;const p=pos(e);g.beginPath();g.moveTo(last[0],last[1]);g.lineTo(p[0],p[1]);g.stroke();last=p;tmSign.drawn=true;tmDirty=true};
   c.onpointerup=c.onpointercancel=()=>{if(down){down=false;tmSign.img=c.toDataURL('image/png');tmCur.data.sign=Object.assign({},tmCur.data.sign||{},{img:tmSign.img});tmSoon()}}}
 function tmSoon(){tmDirty=true;clearTimeout(tmSaveT);tmSaveT=setTimeout(()=>tmSave(true),1500)}
-function tmClean(t){const o=clone(t);o.rows=(o.rows||[]).filter(r=>tidy(r.name)).map(r=>({name:fmtName(r.name),in:r.in||'',out:r.out||'',lunch:r.lunch!==false}));
+function tmClean(t){const o=clone(t);o.rows=(o.rows||[]).filter(r=>tidy(r.name)).map(r=>({name:fmtName(r.name),in:r.in||'',out:r.out||'',lunch:true}));
   o.tmh=tmTotal(o);o.atMs=Date.now();o.by=(ctx&&ctx.email)||o.by||'';return o}
 async function tmSave(quiet){if(!tmCur||!tmCanEdit(tmCur.data))return;clearTimeout(tmSaveT);const id=tmCur.id,o=tmClean(tmCur.data);
   tmDirty=false;const pr=db.doc('tm/'+id).set(o);if(!navigator.onLine){pr.catch(e=>console.error(e));if(!quiet)toast('Sem internet: guardado no aparelho, envia quando voltar');return}
@@ -1795,13 +1794,12 @@ async function tmPdf(t){const rows=t.rows.slice();while(rows.length<15)rows.push
   setTimeout(()=>{fit();try{w.focus();w.print()}catch(e){}},700)}
 /* ---- eventos do editor ---- */
 $('tmDlg').addEventListener('input',e=>{if(!tmCur)return;const t=tmCur.data,el=e.target;
-  const tr=el.closest('tr[data-ri]');if(tr&&el.dataset.tf){const r=t.rows[+tr.dataset.ri];if(!r)return;if(el.dataset.tf==='lunch')r.lunch=el.checked;else r[el.dataset.tf]=el.value;
+  const tr=el.closest('tr[data-ri]');if(tr&&el.dataset.tf){const r=t.rows[+tr.dataset.ri];if(!r)return;r[el.dataset.tf]=el.value;
     if(el.dataset.tf==='name'&&+tr.dataset.ri===t.rows.length-1&&tidy(el.value)){t.rows.push({name:'',in:'',out:'',lunch:true});const tb=$('tmBody').querySelector('tbody');const i=t.rows.length-1;
-      tb.insertAdjacentHTML('beforeend',`<tr data-ri="${i}"><td class="tmn">${i+1}</td><td><input data-tf="name" list="tmWorkers" placeholder="Nome" aria-label="Nome ${i+1}"></td><td><input type="time" data-tf="in" aria-label="Entrada ${i+1}"></td><td><input type="time" data-tf="out" aria-label="Saída ${i+1}"></td><td class="tmc"><input type="checkbox" data-tf="lunch" checked aria-label="Almoço ${i+1}"></td><td class="tmh" id="tmh-${i}"></td></tr>`)}
+      tb.insertAdjacentHTML('beforeend',`<tr data-ri="${i}"><td class="tmn">${i+1}</td><td><input data-tf="name" list="tmWorkers" placeholder="Nome" aria-label="Nome ${i+1}"></td><td><input type="time" data-tf="in" aria-label="Entrada ${i+1}"></td><td><input type="time" data-tf="out" aria-label="Saída ${i+1}"></td><td class="tmh" id="tmh-${i}"></td></tr>`)}
     tmRecalc();tmSoon();return}
   if(el.dataset.tk){t[el.dataset.tk]=el.value;tmSoon();return}
   if(el.dataset.sk){t.sign=Object.assign({},t.sign||{},{[el.dataset.sk]:el.value});tmSoon()}});
-$('tmDlg').addEventListener('change',e=>{if(e.target.dataset&&e.target.dataset.tf==='lunch'){const tr=e.target.closest('tr[data-ri]');tmCur.data.rows[+tr.dataset.ri].lunch=e.target.checked;tmRecalc();tmSoon()}});
 $('tmDlg').addEventListener('click',async e=>{const id=e.target.id;if(!tmCur&&id!=='tmDlg')return;
   if(id==='tmDlg'||id==='tmClose'){tmClose();return}
   if(id==='tmApply'){const a=$('tmTin').value,b=$('tmTout').value;if(!a||!b){toast('Coloque a entrada e a saída da turma');return}
