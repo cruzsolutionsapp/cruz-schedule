@@ -937,6 +937,8 @@ function watchAtt(){
   ATT={};
   attUnsub=db.collection('attendance').where('date','==',cur).onSnapshot(s=>{
     ATT={};s.docs.forEach(d=>{const x=d.data();if(x&&x.jobId)ATT[x.jobId]=x});
+    // T&M aberta (rascunho deste dia): acompanha a presença na hora
+    try{if(tmCur&&tmCur.data.status==='draft'&&tmCur.data.date===cur){const jj=D.jobs.find(x=>x.id===tmCur.data.jobId);if(jj&&tmSyncAtt(tmCur.data,jj)){tmRender();tmSoon();toast('Lista ajustada pela presença marcada')}}}catch(e){}
     renderPhotos();renderTotem();renderCentral();
     if(dayLoaded){if(typing())deferred=true;else renderJobs()}
   },e=>console.error(e));
@@ -1698,7 +1700,9 @@ function tmAttNote(j){const a=ATT[j.id];const ppl=(a&&a.people)||{};
   return `<p class="alert ok tmatt">✓ Nomes puxados da presença (quem veio).${falt.length?' Faltaram (fora da folha): '+esc(falt.join(', '))+'.':''}${sem.length?' <b>Sem marcar:</b> '+esc(sem.join(', '))+' — marque em "Quem veio hoje?".':''}</p>`}
 /* rascunho aberto de novo: tira quem foi marcado que faltou (se não tem horário) e põe quem veio e não está */
 function tmSyncAtt(t,j){if(!j||t.status!=='draft')return false;const a=ATT[j.id];const ppl=(a&&a.people)||{};if(!Object.keys(ppl).length)return false;let ch=false;
-  t.rows=t.rows.filter(r=>{const k=Object.keys(ppl).find(n=>nkey(n)===nkey(r.name||''));if(k&&ppl[k]==='out'&&!r.in&&!r.out){ch=true;return false}return true});
+  // sai da folha: quem foi marcado Faltou, e quem é da equipe mas ainda não foi marcado (mesmo que já tenha horário do "Aplicar pra todos")
+  t.rows=t.rows.filter(r=>{if(!tidy(r.name))return true;const k=Object.keys(ppl).find(n=>nkey(n)===nkey(r.name));
+    const crew=j.crew.some(c=>nkey(c.name)===nkey(r.name));if((k&&ppl[k]==='out')||(!k&&crew)){ch=true;return false}return true});
   tmPeople(j).forEach(n=>{if(!t.rows.some(r=>nkey(r.name||'')===nkey(n))){const i=t.rows.findIndex(r=>!tidy(r.name));const row={name:n,in:'',out:'',lunch:true};if(i>=0)t.rows.splice(i,0,row);else t.rows.push(row);ch=true}});
   return ch}
 /* ---- editor ---- */
