@@ -652,3 +652,6 @@ body.viewer{padding-bottom:24px}
   .tmtable input[type=time]{min-width:0}
   .tmtable tfoot tr{display:flex;justify-content:space-between;padding:8px 0}.tmtable tfoot td{border:0}.tmtable tfoot td:first-child{display:none}
 }
+
+/* botão Sair no topo (todo mundo) */
+.topbar .logoutbtn{display:inline-flex;align-items:center;padding:4px 10px;min-height:0;font-size:13px;font-weight:600}

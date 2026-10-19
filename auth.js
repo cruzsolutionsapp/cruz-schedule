@@ -141,7 +141,7 @@ async function route(u) {
   $('who').textContent = me + (isAdmin ? ' · admin' : '');
   $('tab-access').hidden = !isAdmin;
   $('logout').onclick = () => { try { started && started.flushAll(); } catch (e) {} signOut(auth); };
-  $('logout2').onclick = $('logout').onclick;
+  $('logout2').onclick = () => { if (confirm('Sair do app (deslogar) neste aparelho?\n\nPra entrar de novo vai precisar do e-mail e da senha.')) $('logout').onclick(); };
   // confere a senha de novo (pra excluir T&M etc.): só passa se a senha for a deste login
   const reauth = pwd => reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(auth.currentUser.email, pwd)).then(() => auth.currentUser.getIdToken(true)).then(() => true);
   started = window.startApp(dbw, { email: me, isAdmin, perms, worker: md.worker || '', totem: totemOnly, reauth });
