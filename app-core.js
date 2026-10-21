@@ -412,7 +412,9 @@ function renderJobs(){
     return `<article class="job${collapsed?' collapsed':''}" data-id="${j.id}">
       <div class="job-head">
         <span class="num">${i+1}</span><span class="chev" title="${collapsed?'Abrir':'Recolher'}" aria-hidden="true">${collapsed?'▸':'▾'}</span>
-        <input data-f="company" list="companyList" value="${esc(j.company)}" placeholder="Companhia" aria-label="Companhia" id="co-${j.id}">
+        <div class="cotitle"><input data-f="company" list="companyList" value="${esc(j.company)}" placeholder="Companhia" aria-label="Companhia" id="co-${j.id}">
+        ${(()=>{const dn=jobDrivers(j)[0];if(!dn)return j.crew.length?'<span class="drvline none">sem motorista</span>':'';const c=j.crew.find(x=>x.name===dn);
+          return `<span class="drvline" title="Motorista do dia">${c&&c.v?esc(vLabel(c.v)):'🔑'} ${esc(dn)}</span>`})()}</div>
         <button class="leftdot${j.left?' on':''}" data-act="left" aria-pressed="${!!j.left}" title="${j.left?'Turma já saiu (toque pra desfazer)':'Turma ainda não saiu (toque quando sair)'}" aria-label="${j.left?'Turma já saiu':'Turma ainda não saiu'}"><span class="dot"></span></button>${j.left?'<span class="wkbadge sentbadge">Despachada</span>':'<span class="wkbadge waitbadge">Aguardando</span>'}
         <span class="wkbadge" ${j.allWeek?'':'hidden'}>All Week</span>
         <span class="latetimer" data-late="${j.id}">${lateText(j)}</span>
