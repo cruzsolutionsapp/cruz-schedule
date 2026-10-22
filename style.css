@@ -690,3 +690,7 @@ body.viewer{padding-bottom:24px}
 .job-head .cotitle input{flex:none;width:100%}
 .drvline{font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
 .drvline.none{color:var(--warn)}
+
+/* botão de idioma */
+.topbar .langbtn{display:inline-flex;align-items:center;padding:4px 10px;min-height:0;font-size:13px;font-weight:600}
+.authcard .langauth{margin-top:14px;align-self:center;font-size:13px;padding:5px 12px;min-height:0}
