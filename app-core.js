@@ -64,16 +64,20 @@ function dropPend(path){try{localStorage.removeItem('pend:'+path)}catch(e){}}
 const dayTx={};   // gravações da escala ainda em andamento, por dia: enquanto tiver, ignora o que o servidor manda (é versão velha)
 function flushDay(path,data){
   keepPend(path,data);
-  if(!navigator.onLine){setStatus('offline');setTimeout(()=>{if(!pend[path]){pend[path]=data;flush(path)}},8000);return}
-  inflight++;dayTx[path]=(dayTx[path]||0)+1;const base=BASE[path]||null;
+  // dayTx[path] fica >0 do começo da gravação até ela dar certo de vez (inclusive enquanto espera pra tentar de novo):
+  // nesse tempo o app não aceita a versão do servidor, senão a mudança some da tela e a pessoa tem que fazer de novo
+  dayTx[path]=(dayTx[path]||0)+1;
+  const retry=ms=>setTimeout(()=>{dayTx[path]=Math.max(0,(dayTx[path]||1)-1);if(!pend[path]){pend[path]=data;flush(path)}else flush(path)},ms);
+  if(!navigator.onLine){setStatus('offline');retry(8000);return}
+  inflight++;const base=BASE[path]||null;
   db.doc(path).tx(srv=>{const m=merge3(base,data,srv);lastSent[path]=stable(m);return m}).then(m=>{
     inflight--;dayTx[path]=Math.max(0,(dayTx[path]||1)-1);BASE[path]=clone(m);dropPend(path);saveHist(m);
-    if(!inflight&&!Object.keys(pend).length)setStatus('ok');
-    if(path===dayPath(cur)&&!pend[path]&&stable(m)!==stable(data)&&stable({date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{}})===stable({date:data.date,jobs:data.jobs,sent:data.sent})){
+    if(!inflight&&!Object.keys(pend).length&&!dayTx[path])setStatus('ok');
+    if(path===dayPath(cur)&&!pend[path]&&!dayTx[path]&&stable(m)!==stable(data)&&stable({date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{}})===stable({date:data.date,jobs:data.jobs,sent:data.sent})){
       D=normDay(m);if(typing())deferred=true;else{renderJobs();renderCentral()}}   // juntou com mudança de outro aparelho
-  },e=>{inflight--;dayTx[path]=Math.max(0,(dayTx[path]||1)-1);console.error(e);
-    if(!navigator.onLine||e&&(e.code==='unavailable'||e.code==='failed-precondition')){setStatus('offline');setTimeout(()=>{if(!pend[path]){pend[path]=data;flush(path)}},8000)}
-    else{setStatus('err');toast('Não consegui salvar: '+(e&&e.code||'erro'))}});
+  },e=>{inflight--;console.error(e);const c=(e&&e.code)||'';
+    if(!navigator.onLine||/unavailable|failed-precondition|aborted|deadline-exceeded|internal|resource-exhausted|cancelled/.test(c)){setStatus(navigator.onLine?'saving':'offline');retry(navigator.onLine?3000:8000)}
+    else{dayTx[path]=Math.max(0,(dayTx[path]||1)-1);setStatus('err');toast('Não consegui salvar: '+(c||'erro'))}});
 }
 window.addEventListener('online',()=>Object.keys(localStorage).filter(k=>k.startsWith('pend:days/')).forEach(k=>{const path=k.slice(5);if(pend[path])return;try{const o=JSON.parse(localStorage.getItem(k));if(o&&o.data&&path===dayPath(cur)){pend[path]=o.data;flush(path)}}catch(e){}}));
 function flush(path){
