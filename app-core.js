@@ -1708,9 +1708,11 @@ function tmSyncAtt(t,j){if(!j||t.status!=='draft')return false;const a=ATT[j.id]
   tmPeople(j).forEach(n=>{if(!t.rows.some(r=>nkey(r.name||'')===nkey(n))){const i=t.rows.findIndex(r=>!tidy(r.name));const row={name:n,in:'',out:'',lunch:true};if(i>=0)t.rows.splice(i,0,row);else t.rows.push(row);ch=true}});
   return ch}
 /* ---- editor ---- */
-function tmOpen(jobId,date){const d=date||cur,id=tmId(d,jobId);const j=D.jobs.find(x=>x.id===jobId);
-  const base=TMS[id]?clone(TMS[id]):(j&&d===cur?tmNew(j):null);if(!base){toast('Não achei essa T&M');return}
-  if(TMS[id]&&j&&d===cur&&tmSyncAtt(base,j)){tmCur={id,data:base};tmDirty=true;$('tmDlg').hidden=false;document.body.classList.add('modal-open');tmRender();tmSoon();toast('Lista ajustada pela presença marcada');return}
+// acha a T&M salva: a do dia aberto (TMS) ou uma que veio do resumo de horas (outro dia)
+function tmFind(id){if(TMS[id])return TMS[id];const h=(typeof hrsData!=='undefined'?hrsData:[]).find(x=>x._id===id);if(!h)return null;const o=Object.assign({},h);delete o._id;return o}
+function tmOpen(jobId,date){const d=date||cur,id=tmId(d,jobId);const j=d===cur?D.jobs.find(x=>x.id===jobId):null;const saved=tmFind(id);
+  const base=saved?clone(saved):(j?tmNew(j):null);if(!base){toast('Não achei essa T&M');return}
+  if(saved&&j&&tmSyncAtt(base,j)){tmCur={id,data:base};tmDirty=true;$('tmDlg').hidden=false;document.body.classList.add('modal-open');tmRender();tmSoon();toast('Lista ajustada pela presença marcada');return}
   tmCur={id,data:base};tmDirty=false;$('tmDlg').hidden=false;document.body.classList.add('modal-open');tmRender()}
 function tmClose(){if(tmDirty&&tmCanEdit(tmCur.data))tmSave(true);tmCur=null;$('tmDlg').hidden=true;document.body.classList.remove('modal-open')}
 function tmRender(){if(!tmCur)return;const t=tmCur.data,ed=tmCanEdit(t);
@@ -1746,7 +1748,7 @@ function tmRender(){if(!tmCur)return;const t=tmCur.data,ed=tmCanEdit(t);
     <div class="tmbtns">${ed?`<button class="btn" id="tmSaveBtn">Salvar rascunho</button><button class="btn primary" id="tmSend">✍️ Enviar T&amp;M</button>`:''}
       ${t.status!=='draft'?`<button class="btn" id="tmPdf">📄 Baixar PDF</button>`:''}
       ${isAdmin&&t.status!=='draft'?`<button class="linkbtn" id="tmUnlock">Destrancar pra corrigir</button>`:''}
-      ${isAdmin&&TMS[tmCur.id]?`<button class="linkbtn tmdel" id="tmDel">🗑 Excluir T&amp;M</button>`:''}</div>
+      ${isAdmin&&tmFind(tmCur.id)?`<button class="linkbtn tmdel" id="tmDel">🗑 Excluir T&amp;M</button>`:''}</div>
     <datalist id="tmWorkers">${S.workers.map(w=>`<option value="${esc(w)}">`).join('')}</datalist>`;
   if(ed){tmPadInit(sg.img||null)}
 }
@@ -1845,7 +1847,12 @@ function renderTmTab(){const box=$('tmList');if(!box||$('view-tm').hidden||$('tm
   box.innerHTML=jobs.length?jobs.map(j=>{const t=TMS[tmId(cur,j.id)];
     return `<div class="tmrow"><div><b>${esc(tidy(j.company)||'Obra')}</b> ${tmBadge(j)}<small>${esc(j.waiting?'(Esperando)':j.address)} · ${j.crew.length} pessoas${t?' · TMH '+hmTxt(t.tmh||tmTotal(t)):''}${t&&t.invoice?' · Invoice '+esc(t.invoice):''}</small></div>
       <div class="tmrowbtn"><button class="btn" data-tmopen="${j.id}">${t?(t.status==='draft'?'Continuar':'Abrir'):'Criar T&M'}</button>${t&&t.status!=='draft'?`<button class="btn" data-tmpdf="${j.id}">PDF</button>`:''}${t&&isAdmin?`<button class="btn danger" data-tmdel="${j.id}" aria-label="Excluir T&M" title="Excluir T&M">🗑</button>`:''}</div></div>`}).join('')
-    :'<p class="empty">Nenhuma obra neste dia.</p>'}
+    :'<p class="empty">Nenhuma obra neste dia.</p>';
+  // T&M deste dia cuja obra não está mais na escala (apagada/mudada): aparece também, pra dar pra abrir/excluir
+  const orf=Object.keys(TMS).filter(id=>TMS[id].date===cur&&!jobs.some(j=>tmId(cur,j.id)===id));
+  if(orf.length)box.innerHTML+='<h4 class="phsub">T&amp;M sem obra na escala deste dia</h4>'+orf.map(id=>{const t=TMS[id];
+    return `<div class="tmrow"><div><b>${esc(t.company||'Obra')}</b> <span class="tmb ${t.status}">${t.no?esc(t.no)+' · ':''}${tmStatusTxt[t.status]||''}</span><small>${esc(t.location||'')} · ${(t.rows||[]).length} pessoas · TMH ${hmTxt(t.tmh||tmTotal(t))} · <i>a obra não está mais na escala</i></small></div>
+      <div class="tmrowbtn"><button class="btn" data-tmopen="${esc(t.jobId)}">Abrir</button>${t.status!=='draft'?`<button class="btn" data-tmpdf="${esc(t.jobId)}">PDF</button>`:''}${isAdmin?`<button class="btn danger" data-tmdel="${esc(t.jobId)}" aria-label="Excluir T&M" title="Excluir T&M">🗑</button>`:''}</div></div>`}).join('')}
 $('view-tm').addEventListener('click',e=>{const o=e.target.closest('[data-tmopen]');if(o){tmOpen(o.dataset.tmopen);return}
   const dl=e.target.closest('[data-tmdel]');if(dl){tmDelOpen(tmId(cur,dl.dataset.tmdel));return}
   const p=e.target.closest('[data-tmpdf]');if(p){const t=TMS[tmId(cur,p.dataset.tmpdf)];if(t)tmPdf(t)}});
@@ -1853,11 +1860,11 @@ if($('tab-tm')){$('tab-tm').hidden=!(P.escala||FIN);$('tab-tm').onclick=()=>{tab
 if($('photosPanel'))$('photosPanel').addEventListener('click',e=>{const o=e.target.closest('[data-tmopen]');if(o){e.stopPropagation();tmOpen(o.dataset.tmopen)}});
 /* ---- excluir T&M (só admin, pedindo a senha de novo; guarda cópia em tmdeleted) ---- */
 let tmDelId=null;
-function tmDelOpen(id){const t=TMS[id];if(!t||!isAdmin)return;tmDelId=id;
+function tmDelOpen(id){const t=tmFind(id);if(!t||!isAdmin)return;tmDelId=id;
   $('tmDelInfo').innerHTML=`<b>${esc(t.company||'Obra')}</b> · ${esc(t.date.split('-').reverse().join('/'))}${t.no?' · '+esc(t.no):''} · ${(t.rows||[]).length} pessoas · TMH ${hmTxt(t.tmh||tmTotal(t))}`;
   $('tmDelWhy').value='';$('tmDelPwd').value='';$('tmDelMsg').textContent='';$('tmDelGo').disabled=false;$('tmDelDlg').hidden=false;setTimeout(()=>$('tmDelWhy').focus(),50)}
 function tmDelClose(){tmDelId=null;$('tmDelPwd').value='';$('tmDelDlg').hidden=true}
-async function tmDelGo(){const id=tmDelId,t=TMS[id];if(!t)return;const why=tidy($('tmDelWhy').value),pwd=$('tmDelPwd').value;
+async function tmDelGo(){const id=tmDelId,t=tmFind(id);if(!t)return;const why=tidy($('tmDelWhy').value),pwd=$('tmDelPwd').value;
   if(!why){$('tmDelMsg').textContent='Escreva o motivo.';return}
   if(!pwd){$('tmDelMsg').textContent='Digite sua senha.';return}
   if(!(ctx&&ctx.reauth)){$('tmDelMsg').textContent='Não consegui conferir a senha neste aparelho.';return}
@@ -1868,7 +1875,7 @@ async function tmDelGo(){const id=tmDelId,t=TMS[id];if(!t)return;const why=tidy(
   try{await db.doc('tmdeleted/'+id+'_'+now).set({tmId:id,date:t.date,company:t.company||'',no:t.no||'',deletedBy:by,deletedAt:now,reason:why,data:t});
     await db.doc('tm/'+id).delete();
     tmDelClose();if(tmCur&&tmCur.id===id){tmCur=null;$('tmDlg').hidden=true;document.body.classList.remove('modal-open')}
-    delete TMS[id];renderTmTab();renderPhotos();toast('T&M excluída · registrado: '+by)}
+    delete TMS[id];hrsData=hrsData.filter(x=>x._id!==id);renderTmTab();renderPhotos();if(!$('tmPaneHrs').hidden)hrsRender();toast('T&M excluída · registrado: '+by)}
   catch(e){console.error(e);$('tmDelGo').disabled=false;$('tmDelMsg').textContent='Não consegui excluir ('+(e.code||'erro')+'). As regras novas do Firebase foram publicadas?'}}
 $('tmDelClose').onclick=tmDelClose;$('tmDelGo').onclick=tmDelGo;$('tmDelDlg').addEventListener('click',e=>{if(e.target.id==='tmDelDlg')tmDelClose()});
 $('tmDelPwd').addEventListener('keydown',e=>{if(e.key==='Enter')tmDelGo()});
@@ -1901,7 +1908,7 @@ async function hrsLoad(){let a=$('hrsFrom').value,b=$('hrsTo').value;if(!a||!b)r
   catch(e){console.error(e);$('hrsInfo').textContent='Não consegui carregar ('+(e.code||'erro')+').'}}
 function hrsRows(){const a=$('hrsFrom').value,b=$('hrsTo').value,drafts=$('hrsDrafts').checked;const out=[];
   hrsData.forEach(t=>{if(t.date<a||t.date>b)return;if(t.status==='draft'&&!drafts)return;
-    (t.rows||[]).forEach(r=>{if(!tidy(r.name))return;out.push({date:t.date,name:fmtName(r.name),key:hKey(r.name),company:t.company||'',location:t.location||'',jobNo:t.jobNo||'',no:t.no||'',
+    (t.rows||[]).forEach(r=>{if(!tidy(r.name))return;out.push({tmid:t._id,date:t.date,name:fmtName(r.name),key:hKey(r.name),company:t.company||'',location:t.location||'',jobNo:t.jobNo||'',no:t.no||'',
       status:t.status,invoice:t.invoice||'',in:r.in||'',out:r.out||'',min:rowMinutes(r)})})});
   return out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:x.name.localeCompare(y.name,'pt'))}
 function hrsGroup(rows){const g={};rows.forEach(r=>{const w=g[r.key]||(g[r.key]={name:r.name,key:r.key,days:{},min:0,sheets:new Set(),rows:[]});
@@ -1924,7 +1931,7 @@ function hrsRender(){const rows=hrsRows(),qq=hKey($('hrsQ').value||''),all=hrsGr
   const head=`<thead><tr><th>Funcionário</th>${showDays?days.map(d=>`<th class="hd">${wdOf(d)}<br><small>${dmy(d)}</small></th>`).join(''):'<th class="hd">Dias</th>'}<th class="hd">Total</th><th class="hd">Decimal</th>${pay?'<th class="hd">Valor/h</th><th class="hd">A pagar</th>':''}</tr></thead>`;
   const body=ws.map(w=>{const open=hrsOpen[w.key];
     const main=`<tr class="hrsw${open?' open':''}" data-hk="${esc(w.key)}"><td><button class="linkbtn hrsname" aria-expanded="${!!open}">${open?'▾':'▸'} ${esc(w.name)}</button></td>${showDays?days.map(d=>`<td class="hd">${w.days[d]?hmTxt(w.days[d]):'<span class="hrs0">—</span>'}</td>`).join(''):`<td class="hd">${Object.keys(w.days).length}</td>`}<td class="hd"><b>${hmTxt(w.min)}</b></td><td class="hd">${hDec(w.min)}</td>${pay?`<td class="hd">${w.rates.length?w.rates.map(money).join(' / '):''}${w.miss?' <span class="paymiss">sem valor</span>':''}</td><td class="hd"><b>${w.rates.length?money(w.pay):'—'}</b></td>`:''}</tr>`;
-    const det=open?`<tr class="hrsdet"><td colspan="${(showDays?days.length:1)+3+(pay?2:0)}">${w.rows.map(r=>`<div class="hrsline"><span>${wdOf(r.date)} ${dmy(r.date)}</span><span><b>${esc(r.company)}</b>${r.location?' · '+esc(r.location):''}</span><span>${esc(fmt(r.in))}–${esc(fmt(r.out))}</span><span><b>${hmTxt(r.min)}</b>${pay&&rateOn(w.key,r.date)!=null?' · '+money(r.min/60*rateOn(w.key,r.date)):''}</span><span class="tmb ${r.status}">${r.no?esc(r.no):tmStatusTxt[r.status]||''}</span></div>`).join('')}</td></tr>`:'';
+    const det=open?`<tr class="hrsdet"><td colspan="${(showDays?days.length:1)+3+(pay?2:0)}">${w.rows.map(r=>`<div class="hrsline"><span>${wdOf(r.date)} ${dmy(r.date)}</span><span><b>${esc(r.company)}</b>${r.location?' · '+esc(r.location):''}</span><span>${esc(fmt(r.in))}–${esc(fmt(r.out))}</span><span><b>${hmTxt(r.min)}</b>${pay&&rateOn(w.key,r.date)!=null?' · '+money(r.min/60*rateOn(w.key,r.date)):''}</span><span class="tmb ${r.status}">${r.no?esc(r.no):tmStatusTxt[r.status]||''}</span><button class="linkbtn" data-hrsopen="${esc(r.tmid)}">Abrir folha</button></div>`).join('')}</td></tr>`:'';
     return main+det}).join('');
   const foot=`<tfoot><tr><td><b>Total</b></td>${showDays?days.map(d=>{const m=ws.reduce((s,w)=>s+(w.days[d]||0),0);return `<td class="hd">${m?hmTxt(m):''}</td>`}).join(''):'<td></td>'}<td class="hd"><b>${hmTxt(tot)}</b></td><td class="hd">${hDec(tot)}</td>${pay?`<td></td><td class="hd"><b>${money(payTot)}</b></td>`:''}</tr></tfoot>`;
   $('hrsTable').innerHTML=head+'<tbody>'+body+'</tbody>'+foot}
@@ -1974,7 +1981,7 @@ if($('tmSubs')){$('tmSubs').hidden=!FIN;$('tmSubDay').onclick=()=>tmSub('day');$
   $('hrsFrom').onchange=$('hrsTo').onchange=hrsLoad;$('hrsDrafts').onchange=hrsRender;$('hrsQ').oninput=hrsRender;$('hrsXls').onclick=hrsXls;
   $('hrsPayLine').addEventListener('click',e=>{if(e.target.id==='hrsPayOpen')payUnlock($('hrsPwd').value,$('hrsPayMsg'));if(e.target.id==='hrsPayLock')payLockNow()});
   $('hrsPayLine').addEventListener('keydown',e=>{if(e.target.id==='hrsPwd'&&e.key==='Enter')payUnlock($('hrsPwd').value,$('hrsPayMsg'))});
-  $('hrsTable').addEventListener('click',e=>{const tr=e.target.closest('tr[data-hk]');if(!tr)return;hrsOpen[tr.dataset.hk]=!hrsOpen[tr.dataset.hk];hrsRender()})}
+  $('hrsTable').addEventListener('click',e=>{const ho=e.target.closest('[data-hrsopen]');if(ho){const t=tmFind(ho.dataset.hrsopen);if(t)tmOpen(t.jobId,t.date);return}const tr=e.target.closest('tr[data-hk]');if(!tr)return;hrsOpen[tr.dataset.hk]=!hrsOpen[tr.dataset.hk];hrsRender()})}
 /* ---- 💲 Valores por hora (Cadastro, trancado com a senha do login; só admin/Financeiro) ----
    pay/rates: {rates:{chave:[{from:'AAAA-MM-DD',rate,by,at}]}, names:{chave:'Nome'}} · paylog/{auto}: quem abriu/mudou */
 let PAY=null,payUntil=0,payT=null,payEdit=null;

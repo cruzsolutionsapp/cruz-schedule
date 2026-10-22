@@ -672,7 +672,7 @@ body.viewer{padding-bottom:24px}
 .hrstable tfoot td{border-top:2px solid var(--line);border-bottom:0}
 .hrs0{color:var(--muted)}.hrsname{font-weight:700;text-align:left;color:var(--ink);text-decoration:none}
 .hrsw.open td{background:var(--sunk)}.hrsdet td{background:var(--sunk);padding:4px 8px 10px}
-.hrsline{display:grid;grid-template-columns:80px minmax(0,1fr) 140px 60px auto;gap:8px;align-items:center;padding:4px 0;font-size:13px;border-top:1px dashed var(--line)}
+.hrsline{display:grid;grid-template-columns:80px minmax(0,1fr) 140px 90px auto auto;gap:8px;align-items:center;padding:4px 0;font-size:13px;border-top:1px dashed var(--line)}
 @media (max-width:560px){.hrsline{grid-template-columns:70px minmax(0,1fr) 60px;}.hrsline span:nth-child(3),.hrsline span:nth-child(5){display:none}}
 /* 💲 valores por hora */
 .payunlock{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
