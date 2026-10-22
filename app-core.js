@@ -61,16 +61,17 @@ function merge3(base,mine,srv){
 }
 function keepPend(path,data){try{localStorage.setItem('pend:'+path,JSON.stringify({data,base:BASE[path]||null,at:Date.now()}))}catch(e){}}
 function dropPend(path){try{localStorage.removeItem('pend:'+path)}catch(e){}}
+const dayTx={};   // gravações da escala ainda em andamento, por dia: enquanto tiver, ignora o que o servidor manda (é versão velha)
 function flushDay(path,data){
   keepPend(path,data);
   if(!navigator.onLine){setStatus('offline');setTimeout(()=>{if(!pend[path]){pend[path]=data;flush(path)}},8000);return}
-  inflight++;const base=BASE[path]||null;
+  inflight++;dayTx[path]=(dayTx[path]||0)+1;const base=BASE[path]||null;
   db.doc(path).tx(srv=>{const m=merge3(base,data,srv);lastSent[path]=stable(m);return m}).then(m=>{
-    inflight--;BASE[path]=clone(m);dropPend(path);saveHist(m);
+    inflight--;dayTx[path]=Math.max(0,(dayTx[path]||1)-1);BASE[path]=clone(m);dropPend(path);saveHist(m);
     if(!inflight&&!Object.keys(pend).length)setStatus('ok');
     if(path===dayPath(cur)&&!pend[path]&&stable(m)!==stable(data)&&stable({date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{}})===stable({date:data.date,jobs:data.jobs,sent:data.sent})){
       D=normDay(m);if(typing())deferred=true;else{renderJobs();renderCentral()}}   // juntou com mudança de outro aparelho
-  },e=>{inflight--;console.error(e);
+  },e=>{inflight--;dayTx[path]=Math.max(0,(dayTx[path]||1)-1);console.error(e);
     if(!navigator.onLine||e&&(e.code==='unavailable'||e.code==='failed-precondition')){setStatus('offline');setTimeout(()=>{if(!pend[path]){pend[path]=data;flush(path)}},8000)}
     else{setStatus('err');toast('Não consegui salvar: '+(e&&e.code||'erro'))}});
 }
@@ -155,6 +156,7 @@ function watchDay(){
   unsubDay=db.doc(path).onSnapshot(snap=>{
     if(path!==dayPath(cur))return;
     if(pend[path])return;
+    if(dayLoaded&&dayTx[path])return;   // ainda salvando: essa versão do servidor é de antes da minha mudança (fazia o nome/obra sumir e ter que pôr de novo)
     if(dayLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
     const d=snap.exists?snap.data():null;
     if(dayLoaded&&d&&stable(d)===lastSent[path])return;
