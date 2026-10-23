@@ -169,6 +169,15 @@
     'O app guarda uma foto da escala a cada 5 minutos de edição. Toque em "Voltar pra esta" pra desfazer uma bagunça.': 'The app keeps a snapshot of the schedule every 5 minutes of editing. Tap "Go back to this one" to undo a mess.',
     'Cole a mensagem que foi pro grupo (do jeito que o app gerou). O app lê as obras, endereços, horários e equipes.': 'Paste the message that went to the group (the way the app made it). The app reads the jobs, addresses, times and crews.',
     '(Esperando endereço) ·': '(Address TBD) ·',
+    // pedidos por SMS
+    '📥 Pedidos': '📥 Requests', '📥 Pedidos por SMS': '📥 Text requests', '← Voltar': '← Back', 'De quem é esse número?': 'Whose number is this?',
+    '📅 Agendar': '📅 Book it', '💬 Responder por SMS': '💬 Reply by text', 'Ignorar': 'Ignore', 'Agendado': 'Booked', 'Ignorado': 'Ignored',
+    'O app lê o pedido sozinho, mas confira os campos antes de agendar. A companhia fica guardada pra esse número.': 'The app reads the request by itself, but check the fields before booking. The company is saved for this number.',
+    'Nenhum pedido ainda. Quando chegar SMS no iPhone da empresa, aparece aqui.': 'No requests yet. When a text arrives on the company iPhone, it shows up here.',
+    'Coloque o dia pra ver quem está livre.': 'Enter the day to see who\'s available.', 'Conferindo o dia…': 'Checking the day…', 'Escolha o dia': 'Choose the day',
+    '⚙️ Ligar o iPhone da empresa (só admin)': '⚙️ Connect the company iPhone (admin only)', 'Copiar URL': 'Copy URL', 'Copiar chave': 'Copy key', 'Copiado': 'Copied',
+    'Marcar essa conversa como ignorada (não é pedido)?': 'Mark this conversation as ignored (not a request)?', 'Resposta (pode mudar antes de enviar):': 'Reply (you can edit it before sending):',
+    'Pediram pelo nome:': 'Requested by name:', '(entram na equipe ao agendar)': '(added to the crew when booked)',
     // confirm (linhas)
     '⚠️ Está SEM assinatura do cliente.': '⚠️ There\'s NO customer signature.', 'Depois de enviada ela fica trancada.': 'Once it\'s sent, it gets locked.'
   };
@@ -181,6 +190,14 @@
   const wdLow = s => s.replace(/\b(domingo|segunda|terça|quarta|quinta|sexta|sábado)\b/gi, m => WD[m.toLowerCase()] || m);
   const pl = (n, a, b) => (+n === 1 ? a : b);
   const RX = [
+    [/^(\d+) livres?$/, '$1 available'], [/^· (\d+) obras? marcadas?(?: · 🌴 (\d+) de day off)?$/, (m, a, b) => '· ' + a + ' ' + pl(a, 'job', 'jobs') + ' booked' + (b ? ' · 🌴 ' + b + ' on day off' : '')],
+    [/^✓ livre$/, '✓ available'], [/^✗ já escalado na (.+)$/, '✗ already on $1'], [/^\+(\d+) \(mais\)$/, '+$1 (more)'],
+    [/^📥 Pedidos \((\d+) novos?\)$/, (m, n) => '📥 Requests (' + n + ' new)'], [/^(\d+) novos?$/, '$1 new'],
+    [/^📥 Novo pedido · (.+)$/, '📥 New request · $1'], [/^✓ Agendado: (.+) · (\S+) (\d\d)\/(\d\d)$/, (m, c, d, a, b) => '✓ Booked: ' + c + ' · ' + (WD[d] || d) + ' ' + b + '/' + a],
+    [/^Agendar (.+) em (\S+) (\d\d)\/(\d\d)\?$/, (m, c, d, a, b) => 'Book ' + c + ' on ' + (WD[d] || d) + ' ' + b + '/' + a + '?'],
+    [/^(domingo|segunda|terça|quarta|quinta|sexta|sábado) (\d\d)\/(\d\d):$/, (m, d, a, b) => WD[d] + ' ' + b + '/' + a + ':'],
+    [/^(\d+) pessoas? · start (.+)$/, (m, n, s) => n + ' ' + pl(n, 'person', 'people') + ' · start ' + s], [/^Quantidade a definir · start (.+)$/, 'Headcount TBD · start $1'],
+    [/^\(endereço a confirmar\)$/, '(address TBD)'],
     [/^(\d+) obras? · (\d+) pessoas?$/, (m, a, b) => a + ' ' + pl(a, 'job', 'jobs') + ' · ' + b + ' ' + pl(b, 'person', 'people')],
     [/^(\d+) de (\d+)$/, '$1 of $2'], [/^(Subir|Descer|Tirar) (.+)$/, (m, a, n) => ({ 'Subir': 'Move up', 'Descer': 'Move down', 'Tirar': 'Remove' })[a] + ' ' + n],
     [/^✓ Nomes puxados da presença \(quem veio\)\.(?: Faltaram \(fora da folha\): (.+)\.)?$/, (m, f) => '✓ Names pulled from attendance (who showed up).' + (f ? ' No-shows (left off the sheet): ' + f + '.' : '')],

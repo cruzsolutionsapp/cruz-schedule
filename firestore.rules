@@ -211,6 +211,30 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // 📥 Pedidos por SMS: o iPhone da empresa (app Atalhos) cria aqui com a chave secreta; quem edita escala lê e marca
+    match /inbox/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['text', 'from', 'name', 'at', 'key'])
+        && exists(/databases/$(database)/documents/secret/inbox)
+        && request.resource.data.key == get(/databases/$(database)/documents/secret/inbox).data.key
+        && request.resource.data.text is string && request.resource.data.text.size() <= 3000
+        && request.resource.data.from is string && request.resource.data.from.size() <= 60
+        && request.resource.data.at is string && request.resource.data.at.size() <= 40
+        && (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() <= 80));
+      allow read: if can('escala');
+      allow update: if can('escala') && onlyChanged(['status', 'by', 'doneAt', 'jobDate'])
+        && request.resource.data.status in ['new', 'done', 'ignored'];
+      allow delete: if isAdmin();
+    }
+    // Chave secreta dos pedidos por SMS (só o admin vê e troca; o atalho do iPhone manda junto)
+    match /secret/inbox {
+      allow read, write: if isAdmin();
+    }
+    // Número de quem manda SMS → companhia (o app aprende)
+    match /config/senders {
+      allow read: if can('escala');
+      allow write: if can('escala') && request.resource.data.keys().hasOnly(['senders']);
+    }
+
     // Escala de cada dia
     match /days/{day} {
       allow read: if isMember();

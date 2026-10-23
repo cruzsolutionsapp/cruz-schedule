@@ -694,3 +694,18 @@ body.viewer{padding-bottom:24px}
 /* botão de idioma */
 .topbar .langbtn{display:inline-flex;align-items:center;padding:4px 10px;min-height:0;font-size:13px;font-weight:600}
 .authcard .langauth{margin-top:14px;align-self:center;font-size:13px;padding:5px 12px;min-height:0}
+/* 📥 pedidos por SMS */
+.histlink.inboxlink.hot{color:var(--hivis-ink);background:var(--hivis);border-radius:999px;padding:2px 10px;font-weight:700}
+.inblist{display:flex;flex-direction:column;gap:8px}
+.inbrow{display:flex;justify-content:space-between;gap:10px;text-align:left;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface);color:var(--ink);cursor:pointer;width:100%}
+.inbrow.done{opacity:.6}.inbrow small{display:block;color:var(--muted)}.inbtxt{display:block;color:var(--muted);font-size:13px;margin-top:3px}
+.inbmeta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.inbopen{display:flex;flex-direction:column;gap:10px}.inbhead{display:flex;align-items:baseline;gap:10px}.inbhead small{color:var(--muted)}
+.inbmsgs{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto;background:var(--sunk);padding:10px;border-radius:10px}
+.inbmsg{background:var(--surface);border:1px solid var(--line);border-radius:12px 12px 12px 3px;padding:7px 10px;font-size:14px;max-width:92%;white-space:pre-wrap}
+.inbmsg small{display:block;color:var(--muted);font-size:11px;margin-bottom:2px}.inbmsg.new{border-color:var(--hivis)}
+.inbform{display:flex;flex-direction:column;gap:8px}
+.inbavail{background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:14px;line-height:1.5}.inbavail .ok{color:var(--ok);font-weight:700}.inbavail .no{color:var(--bad);font-weight:700}
+.inbsetup{border:1px dashed var(--line);border-radius:10px;padding:8px 10px;margin-top:6px}.inbsetup summary{cursor:pointer;font-weight:700}
+.inbsteps{padding-left:20px;line-height:1.6}.inbsteps ul{padding-left:18px}
+.inbcode{display:block;word-break:break-all;background:var(--sunk);padding:6px 8px;border-radius:6px;font-size:12px;margin:4px 0}

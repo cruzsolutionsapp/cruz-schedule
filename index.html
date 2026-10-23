@@ -419,6 +419,12 @@
     <button class="btn primary" id="paySave">Salvar valor</button>
   </div>
 </div>
+<div class="modal" id="inboxDlg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="inboxTitle">
+    <div class="sheethead"><h2 id="inboxTitle">📥 Pedidos por SMS</h2><button class="icon-btn" id="inboxClose" aria-label="Fechar">×</button></div>
+    <div id="inboxList" class="inblist"></div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 </div>
 <textarea id="fallback" aria-hidden="true" style="position:fixed;left:-9999px;top:0"></textarea>

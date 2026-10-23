@@ -471,8 +471,9 @@ function refresh(save=true){
     +(nWarn&&!viewer?`<button class="linkbtn ackbtn" id="ackAlerts">✓ Já conferi os avisos amarelos</button>`:'')
 
     +(nAck?`<small class="ackinfo">${nAck} aviso${nAck>1?'s':''} já conferido${nAck>1?'s':''} · <button class="linkbtn" id="ackUndo">mostrar de novo</button></small>`:'');
-  $('toolsBar').innerHTML=''    +(P.escala?`<div class="histlinks"><button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button><button class="linkbtn histlink" id="openImp">📋 Colar mensagem do WhatsApp</button><button class="linkbtn histlink" id="openTv">📺 Ver a TV</button><button class="linkbtn histlink" id="pingTv">🔄 Atualizar a TV</button></div>`:'')
+  $('toolsBar').innerHTML=''    +(P.escala?`<div class="histlinks"><button class="linkbtn histlink inboxlink" id="openInbox">📥 Pedidos</button><button class="linkbtn histlink" id="openHist">🕘 Versões anteriores do dia</button><button class="linkbtn histlink" id="openImp">📋 Colar mensagem do WhatsApp</button><button class="linkbtn histlink" id="openTv">📺 Ver a TV</button><button class="linkbtn histlink" id="pingTv">🔄 Atualizar a TV</button></div>`:'')
     +(D.jobs.length>1?`<div class="histlinks">${D.jobs.every(isCollapsed)?'<button class="linkbtn histlink" id="expandAll">▾ Abrir todas</button>':'<button class="linkbtn histlink" id="collapseAll">▸ Recolher todas</button>'}${P.escala&&D.jobs.some(j=>!j.left)?'<button class="linkbtn histlink" id="leftAll">✅ Despachar todas</button>':''}</div>`:'');
+  try{refreshInboxLink()}catch(e){}
   $('preview').textContent=buildMsg()||(viewer?'Nenhuma escala lançada pra este dia ainda.':'(sem obras)');
   if(viewer)$('msgTitle').innerHTML='Escala <small>'+esc(dateBR())+'</small>';
   const a=assignedSet();const free=S.workers.filter(w=>!a.has(w.toLowerCase())&&!isOff(w));const offs=Object.keys(OFF);
@@ -2038,6 +2039,160 @@ async function paySave(){if(!payEdit||!PAY)return;const rate=Math.round(parseFlo
 if($('payPanel')){payRender();$('payOpen').onclick=()=>payUnlock($('payPwd').value,$('payMsg'));$('payPwd').addEventListener('keydown',e=>{if(e.key==='Enter')$('payOpen').click()});
   $('payLock').onclick=payLockNow;$('payQ').oninput=payRender;$('payList').addEventListener('click',e=>{const b=e.target.closest('[data-payk]');if(b)payDlgOpen(b.dataset.payk,b.dataset.payn)});
   $('payDlgClose').onclick=payDlgClose;$('payHist').addEventListener('click',e=>{const b=e.target.closest('[data-paydel]');if(b)payDel(b.dataset.paydel)});$('paySave').onclick=paySave;$('payDlg').addEventListener('click',e=>{if(e.target.id==='payDlg')payDlgClose()})}
+/* ===================== 📥 PEDIDOS POR SMS (iPhone da empresa → Atalhos → banco) =====================
+   inbox/{auto}: {text, from (número), name (nome do contato, se tiver), at (data ISO do iPhone), key (chave secreta — confere nas regras),
+                  status:'new'|'done'|'ignored', by, doneAt, jobDate}  ·  config/senders {senders:{numero: companhia}}
+   As mensagens de um mesmo número viram uma conversa; o app lê dia, quantidade, nomes pedidos, horário e endereço. */
+let INBOX=[],inboxUnsub=null,inboxReady=false,SENDERS={},inboxSel=null,inboxSeen=new Set();
+const telKey=s=>String(s||'').replace(/[^\d]/g,'').replace(/^1(?=\d{10}$)/,'');
+const telFmt=s=>{const d=telKey(s);return d.length===10?`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`:String(s||'')};
+const msgMs=m=>{const t=Date.parse(m.at||'');return isNaN(t)?0:t};
+function watchInbox(){if(!P.escala||inboxUnsub)return;
+  const since=new Date(Date.now()-21*86400000).toISOString();
+  inboxUnsub=db.collection('inbox').where('at','>=',since).onSnapshot(s=>{
+    const fresh=[];s.docs.forEach(d=>{if(inboxReady&&!inboxSeen.has(d.id)&&(d.data().status||'new')==='new')fresh.push(d.data());inboxSeen.add(d.id)});
+    INBOX=s.docs.map(d=>Object.assign({_id:d.id},d.data())).sort((a,b)=>msgMs(a)-msgMs(b));
+    if(fresh.length){const m=fresh[fresh.length-1];toast('📥 Novo pedido · '+(m.name||telFmt(m.from))+': '+String(m.text||'').slice(0,60),6000)}
+    inboxReady=true;refreshInboxLink();if(!$('inboxDlg').hidden)renderInbox()},e=>console.error('inbox',e));
+  db.doc('config/senders').onSnapshot(d=>{SENDERS=(d.exists&&d.data().senders)||{};if(!$('inboxDlg').hidden)renderInbox()},e=>{});
+}
+function inboxThreads(){const g={};INBOX.forEach(m=>{const k=telKey(m.from)||m.from||'?';(g[k]=g[k]||{key:k,from:m.from,name:'',msgs:[]}).msgs.push(m);if(m.name)g[k].name=m.name});
+  return Object.values(g).map(t=>{t.open=t.msgs.filter(m=>(m.status||'new')==='new');t.last=msgMs(t.msgs[t.msgs.length-1]);return t}).sort((a,b)=>(b.open.length?1:0)-(a.open.length?1:0)||b.last-a.last)}
+const inboxNew=()=>inboxThreads().filter(t=>t.open.length).length;
+function refreshInboxLink(){const b=$('openInbox');if(!b)return;const n=inboxNew();b.textContent='📥 Pedidos'+(n?` (${n} novo${n>1?'s':''})`:'');b.classList.toggle('hot',!!n)}
+/* ---- leitura do pedido (inglês e português) ---- */
+const NUMW={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,um:1,uma:1,dois:2,duas:2,'três':3,tres:3,quatro:4,cinco:5,seis:6,sete:7,oito:8,nove:9,dez:10};
+const WDN={sunday:0,sun:0,monday:1,mon:1,tuesday:2,tue:2,tues:2,wednesday:3,wed:3,thursday:4,thu:4,thur:4,thurs:4,friday:5,fri:5,saturday:6,sat:6,
+  domingo:0,segunda:1,'terça':2,terca:2,quarta:3,quinta:4,sexta:5,'sábado':6,sabado:6};
+function parseReqText(txt,ref){const t=' '+String(txt||'').replace(/\s+/g,' ')+' ',low=t.toLowerCase(),o={};
+  const r=ref?new Date(ref):new Date();r.setHours(12,0,0,0);
+  // dia: 10/23 (mês/dia), senão dia da semana, senão amanhã/hoje
+  let m=low.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if(m){const mo=+m[1],dd=+m[2];if(mo>=1&&mo<=12&&dd>=1&&dd<=31){let y=m[3]?(+m[3]<100?2000+ +m[3]:+m[3]):r.getFullYear();let d=new Date(y,mo-1,dd,12);if(!m[3]&&d<new Date(r.getTime()-60*86400000))d=new Date(y+1,mo-1,dd,12);o.date=iso(d)}}
+  if(!o.date){const w=low.match(/\b(next |this |coming |próxima |proxima |nessa |essa |esta )?(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tues?|wed|thu(?:rs?)?|fri|sat|domingo|segunda|terça|terca|quarta|quinta|sexta|sábado|sabado)\b/);
+    if(w){const want=WDN[w[2]];let add=(want-r.getDay()+7)%7;if(w[1]&&/next|próxima|proxima/.test(w[1])&&add===0)add=7;const d=new Date(r);d.setDate(d.getDate()+add);o.date=iso(d)}}
+  if(!o.date){if(/\b(tomorrow|tmrw|tmr|amanhã|amanha)\b/.test(low)){const d=new Date(r);d.setDate(d.getDate()+1);o.date=iso(d)}else if(/\b(today|tonight|hoje)\b/.test(low))o.date=iso(r)}
+  // quantidade
+  const NW='(\\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|um|uma|dois|duas|três|tres|quatro|cinco|seis|sete|oito|nove|dez)';
+  const toN=x=>/^\d+$/.test(x)?+x:NUMW[x];
+  let q=low.match(new RegExp('total (?:of )?'+NW+'\\b'))||low.match(new RegExp('\\b'+NW+' (?:more )?(?:guys?|men|man|techs?|technicians?|workers?|people|persons?|laborers?|helpers?|hands|caras?|pessoas?|homens?|funcion[aá]rios?)\\b'))||low.match(new RegExp('\\b(?:need|needs|needed|preciso de|precisamos de|precisa de) '+NW+'\\b'));
+  if(q){o.need=toN(q[1]);if(/\bmore\b|\bmais\b/.test(q[0])&&!/total/.test(q[0]))o.more=o.need}
+  else if(/\b(one more|another) (guy|man|tech|worker|person|helper)\b|\bmais um\b/.test(low)){o.more=1}
+  // nomes pedidos (do cadastro)
+  const names=[];S.workers.forEach(w=>{const full=tidy(w),first=full.split(' ')[0];const re=s=>new RegExp('(^|[^\\p{L}])'+s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^\\p{L}])','iu');
+    if(re(full).test(t)||(first.length>=3&&re(first).test(t)))names.push(full)});
+  if(names.length)o.names=names;
+  // horário
+  const h=low.match(/\b(\d{1,2})(?::(\d{2}))?\s?(am|pm|a\.m\.|p\.m\.)/)||low.match(/\b(?:at|@|às|as|start(?:ing)? at|start)\s(\d{1,2})(?::(\d{2}))\b/);
+  if(h){let hh=+h[1],mm=+(h[2]||0);const ap=(h[3]||'').replace(/\./g,'');if(ap==='pm'&&hh<12)hh+=12;if(ap==='am'&&hh===12)hh=0;if(!ap&&hh<6)hh+=12;if(hh<24&&mm<60)o.start=pad(hh)+':'+pad(mm)}
+  // endereço: um já salvo, ou "123 Nome St..."
+  const known=[];Object.values(S.companies||{}).forEach(L=>(L||[]).forEach(a=>known.push(a)));
+  const ka=known.find(a=>{const s=akey(a).split(',')[0];return s.length>6&&akey(t).includes(s)});
+  const am=t.match(/\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,4}\s+(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Boulevard|Way|Ct|Court|Pl|Place|Pkwy|Parkway|Hwy|Highway|Ter|Terrace|Cir|Circle|Sq|Square|Tpke|Turnpike)\b\.?(?:,?\s*(?:Unit|Apt|Suite|Ste|#)\s*[\w-]+)?(?:,?\s+[A-Z][A-Za-z.]+(?:\s[A-Z][A-Za-z.]+)?)?(?:,?\s*(?:MA|NH|RI|CT|Massachusetts))?(?:\s+\d{5})?/);
+  if(am)o.address=fmtAddress(am[0].replace(/[\s,]+$/,''));else if(ka)o.address=ka;
+  // tipo de serviço (vai pra observação)
+  const job=low.match(/\b(cleaning|clean ?up|demo(?:lition)?|tear ?out|gut|haul(?:ing)?|junk removal|limpeza|demoli[cç][aã]o)\b(?: job)?/);if(job)o.note=job[0].replace(/^\w/,c=>c.toUpperCase());
+  return o}
+function parseThread(th){const o={};let base=null;
+  th.msgs.forEach(m=>{const p=parseReqText(m.text,msgMs(m)||Date.now());['date','start','address','note'].forEach(k=>{if(p[k])o[k]=p[k]});
+    if(p.need)o.need=p.need;if(p.more&&!p.need)o.more=(o.more||0)+p.more;if(p.names)o.names=[...new Set([...(o.names||[]),...p.names])]});
+  const co=SENDERS[th.key];if(co)o.company=co;else{const all=Object.keys(S.companies||{});const hit=all.find(c=>c.length>2&&new RegExp('\\b'+c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(th.msgs.map(m=>m.text).join(' ')));if(hit)o.company=hit}
+  if(!o.need&&o.names)o.need=o.names.length;
+  return o}
+/* ---- disponibilidade do dia ---- */
+const AVC={};
+async function dayAvail(ds){if(AVC[ds]&&Date.now()-AVC[ds].t<60000)return AVC[ds];
+  const [d,off]=await Promise.all([db.doc(dayPath(ds)).get(),db.doc('dayoff/'+ds).get()]);
+  const jobs=(d.exists&&Array.isArray(d.data().jobs))?d.data().jobs:[],people=(off.exists&&off.data().people)||{};
+  const busy={};jobs.forEach(j=>(j.crew||[]).forEach(c=>busy[nkey(c.name)]=tidy(j.company)||'obra'));
+  const offK=new Set(Object.keys(people).map(nkey));
+  const used=jobs.reduce((s,j)=>s+Math.max(+j.need||0,(j.crew||[]).length),0);
+  const free=Math.max(0,S.workers.length-used-S.workers.filter(w=>offK.has(nkey(w))&&!busy[nkey(w)]).length);
+  return AVC[ds]={t:Date.now(),free,off:offK.size,jobs:jobs.length,busy,offK}}
+/* ---- tela ---- */
+function openInbox(){$('inboxDlg').hidden=false;document.body.classList.add('modal-open');renderInbox()}
+function closeInbox(){$('inboxDlg').hidden=true;inboxSel=null;document.body.classList.remove('modal-open')}
+const dLong=ds=>{const[y,m,d]=ds.split('-').map(Number);return ['domingo','segunda','terça','quarta','quinta','sexta','sábado'][new Date(y,m-1,d).getDay()]+' '+pad(d)+'/'+pad(m)};
+function renderInbox(){const ths=inboxThreads(),box=$('inboxList');
+  const setup=isAdmin&&!inboxSel?`<details class="inbsetup" id="inbSetup"${inbSetupOpen?' open':''}><summary>⚙️ Ligar o iPhone da empresa (só admin)</summary><div id="inbSetupBody"><p class="hint">Carregando…</p></div></details>`:'';
+  if(!ths.length){box.innerHTML='<p class="empty">Nenhum pedido ainda. Quando chegar SMS no iPhone da empresa, aparece aqui.</p>'+setup;inbSetupWire();return}
+  box.innerHTML=ths.map(th=>{const p=parseThread(th),done=!th.open.length,last=th.msgs[th.msgs.length-1];
+    const who=th.name||telFmt(th.from),co=SENDERS[th.key];
+    if(inboxSel!==th.key)return `<button class="inbrow${done?' done':''}" data-inb="${esc(th.key)}"><div><b>${esc(co||who)}</b>${co?`<small>${esc(who)}</small>`:''}<span class="inbtxt">${esc(String(last.text||'').slice(0,110))}</span></div>
+      <div class="inbmeta">${th.open.length?`<span class="tmb pending">${th.open.length} novo${th.open.length>1?'s':''}</span>`:`<span class="tmb ${last.status==='done'?'signed':''}">${last.status==='done'?'Agendado':'Ignorado'}</span>`}<small>${esc(new Date(th.last).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}</small></div></button>`;
+    // conversa aberta
+    return `<div class="inbopen" data-th="${esc(th.key)}">
+      <div class="inbhead"><button class="linkbtn" data-inbback="1">← Voltar</button><b>${esc(who)}</b>${th.name?`<small>${esc(telFmt(th.from))}</small>`:''}</div>
+      <div class="inbmsgs">${th.msgs.map(m=>`<div class="inbmsg ${(m.status||'new')==='new'?'new':''}"><small>${esc(new Date(msgMs(m)||0).toLocaleString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}</small>${esc(m.text||'')}</div>`).join('')}</div>
+      <div class="inbform">
+        <div class="tmgrid">
+          <label class="f">Companhia<input id="inbCo" list="companyList" value="${esc(p.company||'')}" placeholder="De quem é esse número?"></label>
+          <label class="f">Dia<input type="date" id="inbDate" value="${esc(p.date||'')}"></label>
+          <label class="f">Quantas pessoas<input type="number" id="inbNeed" min="0" max="99" value="${p.need||''}" placeholder="${p.more?'+'+p.more+' (mais)':''}"></label>
+          <label class="f">Start<input type="time" id="inbStart" value="${esc(p.start||'')}"></label>
+        </div>
+        <label class="f">Endereço<input id="inbAddr" value="${esc(p.address||'')}" placeholder="Rua, cidade, MA (pode deixar vazio se ainda não souber)"></label>
+        <label class="f">Observação<input id="inbNote" value="${esc(p.note||'')}"></label>
+        ${p.names?`<p class="hint">Pediram pelo nome: <b>${esc(p.names.join(', '))}</b> (entram na equipe ao agendar)</p>`:''}
+        ${p.more&&!p.need?`<p class="hint">Pediram <b>+${p.more}</b> (mais gente numa obra que já existe?) — confira o dia e coloque o total.</p>`:''}
+        <div class="inbavail" id="inbAvail"></div>
+        <div class="tmbtns"><button class="btn primary" data-inbbook="1">📅 Agendar</button><button class="btn" data-inbsms="1">💬 Responder por SMS</button>${th.open.length?'<button class="btn" data-inbignore="1">Ignorar</button>':''}</div>
+        <p class="hint">O app lê o pedido sozinho, mas confira os campos antes de agendar. A companhia fica guardada pra esse número.</p>
+      </div></div>`}).join('')+setup;inbSetupWire();
+  if(inboxSel){const d=$('inbDate');if(d){d.onchange=()=>showAvail();showAvail()}}}
+async function showAvail(){const el=$('inbAvail');if(!el)return;const ds=$('inbDate').value;if(!ds){el.innerHTML='<span class="hint">Coloque o dia pra ver quem está livre.</span>';return}
+  el.innerHTML='<span class="hint">Conferindo o dia…</span>';
+  try{const a=await dayAvail(ds);if($('inbDate').value!==ds)return;const th=inboxThreads().find(t=>t.key===inboxSel);const p=th?parseThread(th):{};
+    const nm=(p.names||[]).map(n=>{const k=nkey(n);return a.offK.has(k)?`${esc(n)} <b class="no">🌴 day off</b>`:a.busy[k]?`${esc(n)} <b class="no">✗ já escalado na ${esc(a.busy[k])}</b>`:`${esc(n)} <b class="ok">✓ livre</b>`}).join(' · ');
+    const need=+$('inbNeed').value||0;
+    el.innerHTML=`<b>${esc(dLong(ds))}:</b> <span class="${need&&need>a.free?'no':'ok'}">${a.free} livre${a.free===1?'':'s'}</span> · ${a.jobs} obra${a.jobs===1?'':'s'} marcada${a.jobs===1?'':'s'}${a.off?` · 🌴 ${a.off} de day off`:''}${nm?'<br>'+nm:''}`}
+  catch(e){console.error(e);el.innerHTML='<span class="hint">Não consegui conferir o dia.</span>'}}
+async function inbMark(th,status,extra){const by=(ctx&&ctx.email)||'';for(const m of th.open){try{await db.doc('inbox/'+m._id).set(Object.assign({},(({_id,...r})=>r)(m),{status,by,doneAt:Date.now()},extra||{}))}catch(e){console.error(e);toast('Não consegui marcar ('+(e.code||'erro')+')');return false}}return true}
+async function inbSaveSender(key,co){if(!co||SENDERS[key]===co)return;try{await db.doc('config/senders').tx(d=>{const o=(d&&d.senders)||{};o[key]=co;return {senders:o}})}catch(e){console.error(e)}}
+async function inbBook(){const th=inboxThreads().find(t=>t.key===inboxSel);if(!th)return;const p=parseThread(th);
+  const co=fmtCompany($('inbCo').value),ds=$('inbDate').value,need=Math.max(0,Math.min(99,parseInt($('inbNeed').value,10)||0)),start=$('inbStart').value||'07:00',addr=fmtAddress($('inbAddr').value);
+  if(!co){toast('Coloque o nome da companhia');$('inbCo').focus();return}if(!ds){toast('Escolha o dia');return}
+  const key=addr?akey(addr):'',travel=key&&S.travel[key]!=null?S.travel[key]:null;
+  const crew=(p.names||[]).map(n=>({name:n,v:''}));
+  const j={id:nid(),company:co,address:addr,waiting:!addr,office:false,attire:ATTIRE,shop:'',start,early:0,travel,autoShop:true,tk:travel!=null?key:'',need:Math.max(need,crew.length),note:tidy($('inbNote').value),allWeek:false,crew,left:0};
+  if(travel!=null)j.shop=toHHMM(Math.floor((toMin(start)-travel)/5)*5);
+  if(!confirm(`Agendar ${co} em ${dLong(ds)}?\n\n${j.need?j.need+' pessoa'+(j.need>1?'s':''):'Quantidade a definir'} · start ${fmt(start)}${addr?'\n'+addr:'\n(endereço a confirmar)'}`))return;
+  try{await addJobTo(ds,j);if(addr)rememberAddr(j);await inbSaveSender(th.key,co);await inbMark(th,'done',{jobDate:ds});delete AVC[ds];
+    toast('✓ Agendado: '+co+' · '+dLong(ds));inboxSel=null;renderInbox()}catch(e){console.error(e);toast('Não consegui agendar ('+(e.code||'erro')+')')}}
+function inbSms(){const th=inboxThreads().find(t=>t.key===inboxSel);if(!th)return;const ds=$('inbDate').value,need=+$('inbNeed').value||0,addr=$('inbAddr').value,start=$('inbStart').value;
+  const day=ds?(()=>{const[y,m,d]=ds.split('-').map(Number);return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(y,m-1,d).getDay()]+' '+m+'/'+d})():'that day';
+  let body=`Yes, we have ${need?need+' guy'+(need>1?'s':''):'guys'} available for ${day}.`+(addr&&start?` See you at ${addr} at ${fmt(start)}.`:' Please send the address and start time.');
+  const t=prompt('Resposta (pode mudar antes de enviar):',body);if(t==null)return;
+  location.href='sms:'+(telKey(th.from).length===10?'+1'+telKey(th.from):th.from)+'&body='+encodeURIComponent(t)}
+$('inboxDlg').addEventListener('click',async e=>{const t=e.target;if(t.id==='inboxDlg'||t.id==='inboxClose'){closeInbox();return}
+  const r=t.closest('[data-inb]');if(r){inboxSel=r.dataset.inb;renderInbox();return}
+  if(t.closest('[data-inbback]')){inboxSel=null;renderInbox();return}
+  if(t.closest('[data-inbbook]')){inbBook();return}
+  if(t.closest('[data-inbsms]')){inbSms();return}
+  if(t.closest('[data-inbignore]')){const th=inboxThreads().find(x=>x.key===inboxSel);if(th&&confirm('Marcar essa conversa como ignorada (não é pedido)?')){if(await inbMark(th,'ignored')){inboxSel=null;renderInbox()}}}});
+$('inboxDlg').addEventListener('input',e=>{if(e.target.id==='inbNeed')showAvail()});
+document.addEventListener('click',e=>{if(e.target.id==='openInbox')openInbox()});
+/* ---- configurar o iPhone (admin): chave secreta + passo a passo do Atalhos ---- */
+const FS_URL='https://firestore.googleapis.com/v1/projects/cruz-schedule/databases/(default)/documents/inbox?key=AIzaSyA-57toRP8Fwq3SyYcliJhYywu9CcnGCM4';
+let inbSetupOpen=false;
+function inbSetupWire(){const d=$('inbSetup');if(!d)return;if(inbSetupOpen)inbSetupShow();d.ontoggle=()=>{inbSetupOpen=d.open;if(d.open)inbSetupShow()}}
+async function inbSetupShow(force){const el=$('inbSetupBody');if(!el)return;let key='';
+  try{const s=await db.doc('secret/inbox').get();key=s.exists?s.data().key:'';
+    if(!key||force){key=Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'[b%57]).join('');await db.doc('secret/inbox').set({key,by:(ctx&&ctx.email)||'',at:Date.now()})}}
+  catch(e){console.error(e);el.innerHTML='<p class="hint">Não consegui abrir a chave ('+esc(e.code||'erro')+'). As regras novas do Firebase foram publicadas?</p>';return}
+  el.innerHTML=`<p>No iPhone da empresa, abra o app <b>Atalhos</b> → <b>Automação</b> → <b>+</b> → <b>Mensagem</b>. Em "Remetente" escolha os clientes (ou qualquer um), marque <b>Executar Imediatamente</b> e depois <b>Nova Automação em Branco</b>. Adicione estas ações:</p>
+    <ol class="inbsteps">
+      <li><b>Formatar Data</b>: Data Atual · formato <b>ISO 8601</b> (incluir hora).</li>
+      <li><b>Obter Conteúdo do URL</b> com este URL:<code class="inbcode" id="inbUrl">${esc(FS_URL)}</code><button class="linkbtn" data-copy="inbUrl">Copiar URL</button>
+        Toque em ▸: Método <b>POST</b> · Corpo da Solicitação <b>JSON</b> · adicione um campo <b>fields</b> do tipo <b>Dicionário</b> e, dentro dele, 4 campos do tipo Dicionário, cada um com um texto <b>stringValue</b>:
+        <ul><li><b>text</b> → stringValue = <i>Conteúdo da Mensagem</i></li><li><b>from</b> → stringValue = <i>Remetente</i></li><li><b>at</b> → stringValue = <i>Data Formatada</i></li>
+        <li><b>key</b> → stringValue = <code class="inbcode" id="inbKey">${esc(key)}</code> <button class="linkbtn" data-copy="inbKey">Copiar chave</button></li></ul></li>
+    </ol>
+    <p class="hint">Pronto: cada SMS novo aparece aqui em segundos. Mande um SMS de teste pro número da empresa pra conferir. Se a chave vazar, toque em <button class="linkbtn" id="inbNewKey">gerar chave nova</button> (aí troque no Atalho também).</p>`}
+document.addEventListener('click',e=>{const c=e.target.closest('[data-copy]');if(c){const el=$(c.dataset.copy);if(el){const t=el.textContent;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('Copiado'),()=>{const f=$('fallback');f.value=t;f.select();document.execCommand('copy');toast('Copiado')})}}
+  if(e.target.id==='inbNewKey'&&confirm('Gerar uma chave nova? A antiga para de funcionar e você precisa trocar no Atalho do iPhone.'))inbSetupShow(true)});
+
+watchInbox();
 if(viewer)tab('day');
 $('date').value=cur;showWeekday();
 S=normRoster(null);
