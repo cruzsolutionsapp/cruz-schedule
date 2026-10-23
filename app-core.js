@@ -2114,9 +2114,13 @@ function openInbox(){$('inboxDlg').hidden=false;document.body.classList.add('mod
 function closeInbox(){$('inboxDlg').hidden=true;inboxSel=null;document.body.classList.remove('modal-open')}
 const dLong=ds=>{const[y,m,d]=ds.split('-').map(Number);return ['domingo','segunda','terça','quarta','quinta','sexta','sábado'][new Date(y,m-1,d).getDay()]+' '+pad(d)+'/'+pad(m)};
 function renderInbox(){const ths=inboxThreads(),box=$('inboxList');
+  const paste=!inboxSel?`<details class="inbsetup inbpaste" id="inbPaste"${inbPasteOpen?' open':''}><summary>📋 Colar um SMS (copie a mensagem no iPhone e cole aqui)</summary>
+      <label class="f">De quem (telefone ou nome)<input id="inbPFrom" placeholder="Ex.: (508) 555-1234" value="${esc(inbPFrom)}"></label>
+      <label class="f">Mensagem<textarea id="inbPText" rows="4" placeholder="Cole aqui o SMS do cliente…">${esc(inbPText)}</textarea></label>
+      <button class="btn primary" id="inbPGo">Adicionar aos pedidos</button></details>`:'';
   const setup=isAdmin&&!inboxSel?`<details class="inbsetup" id="inbSetup"${inbSetupOpen?' open':''}><summary>⚙️ Ligar o iPhone da empresa (só admin)</summary><div id="inbSetupBody"><p class="hint">Carregando…</p></div></details>`:'';
-  if(!ths.length){box.innerHTML='<p class="empty">Nenhum pedido ainda. Quando chegar SMS no iPhone da empresa, aparece aqui.</p>'+setup;inbSetupWire();return}
-  box.innerHTML=ths.map(th=>{const p=parseThread(th),done=!th.open.length,last=th.msgs[th.msgs.length-1];
+  if(!ths.length){box.innerHTML=paste+'<p class="empty">Nenhum pedido ainda. Cole um SMS acima, ou ligue o iPhone da empresa (aí chega sozinho).</p>'+setup;inbSetupWire();return}
+  box.innerHTML=paste+ths.map(th=>{const p=parseThread(th),done=!th.open.length,last=th.msgs[th.msgs.length-1];
     const who=th.name||telFmt(th.from),co=SENDERS[th.key];
     if(inboxSel!==th.key)return `<button class="inbrow${done?' done':''}" data-inb="${esc(th.key)}"><div><b>${esc(co||who)}</b>${co?`<small>${esc(who)}</small>`:''}<span class="inbtxt">${esc(String(last.text||'').slice(0,110))}</span></div>
       <div class="inbmeta">${th.open.length?`<span class="tmb pending">${th.open.length} novo${th.open.length>1?'s':''}</span>`:`<span class="tmb ${last.status==='done'?'signed':''}">${last.status==='done'?'Agendado':'Ignorado'}</span>`}<small>${esc(new Date(th.last).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}</small></div></button>`;
@@ -2174,7 +2178,13 @@ $('inboxDlg').addEventListener('input',e=>{if(e.target.id==='inbNeed')showAvail(
 document.addEventListener('click',e=>{if(e.target.id==='openInbox')openInbox()});
 /* ---- configurar o iPhone (admin): chave secreta + passo a passo do Atalhos ---- */
 const FS_URL='https://firestore.googleapis.com/v1/projects/cruz-schedule/databases/(default)/documents/inbox?key=AIzaSyA-57toRP8Fwq3SyYcliJhYywu9CcnGCM4';
-let inbSetupOpen=false;
+let inbSetupOpen=false,inbPasteOpen=false,inbPFrom='',inbPText='';
+document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='inbPaste')inbPasteOpen=e.target.open},true);
+document.addEventListener('input',e=>{if(e.target.id==='inbPFrom')inbPFrom=e.target.value;if(e.target.id==='inbPText')inbPText=e.target.value});
+document.addEventListener('click',async e=>{if(e.target.id!=='inbPGo')return;const text=tidy(inbPText)?String(inbPText).trim():'',from=tidy(inbPFrom);
+  if(!text){toast('Cole a mensagem');return}if(!from){toast('Coloque de quem é (telefone ou nome)');$('inbPFrom').focus();return}
+  try{await db.doc('inbox/m'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)).set({text:text.slice(0,3000),from:from.slice(0,60),name:'',at:new Date().toISOString(),by:(ctx&&ctx.email)||'',manual:true});
+    inbPText='';inbPasteOpen=false;inboxSel=telKey(from)||from;toast('✓ Pedido adicionado');renderInbox()}catch(err){console.error(err);toast('Não consegui adicionar ('+(err.code||'erro')+'). As regras novas do Firebase foram publicadas?')}});
 function inbSetupWire(){const d=$('inbSetup');if(!d)return;if(inbSetupOpen)inbSetupShow();d.ontoggle=()=>{inbSetupOpen=d.open;if(d.open)inbSetupShow()}}
 async function inbSetupShow(force){const el=$('inbSetupBody');if(!el)return;let key='';
   try{const s=await db.doc('secret/inbox').get();key=s.exists?s.data().key:'';

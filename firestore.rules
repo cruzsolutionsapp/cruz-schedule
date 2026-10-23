@@ -220,6 +220,11 @@ service cloud.firestore {
         && request.resource.data.from is string && request.resource.data.from.size() <= 60
         && request.resource.data.at is string && request.resource.data.at.size() <= 40
         && (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() <= 80));
+      // colado à mão no app (botão "📋 Colar um SMS"): quem edita escala
+      allow create: if can('escala') && request.resource.data.keys().hasOnly(['text', 'from', 'name', 'at', 'by', 'manual'])
+        && request.resource.data.text is string && request.resource.data.text.size() <= 3000
+        && request.resource.data.from is string && request.resource.data.from.size() <= 60
+        && request.resource.data.at is string && request.resource.data.at.size() <= 40;
       allow read: if can('escala');
       allow update: if can('escala') && onlyChanged(['status', 'by', 'doneAt', 'jobDate'])
         && request.resource.data.status in ['new', 'done', 'ignored'];

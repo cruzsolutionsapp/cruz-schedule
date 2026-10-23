@@ -178,6 +178,10 @@
     '⚙️ Ligar o iPhone da empresa (só admin)': '⚙️ Connect the company iPhone (admin only)', 'Copiar URL': 'Copy URL', 'Copiar chave': 'Copy key', 'Copiado': 'Copied',
     'Marcar essa conversa como ignorada (não é pedido)?': 'Mark this conversation as ignored (not a request)?', 'Resposta (pode mudar antes de enviar):': 'Reply (you can edit it before sending):',
     'Pediram pelo nome:': 'Requested by name:', '(entram na equipe ao agendar)': '(added to the crew when booked)',
+    '📋 Colar um SMS (copie a mensagem no iPhone e cole aqui)': '📋 Paste a text (copy it on the iPhone and paste it here)', 'De quem (telefone ou nome)': 'From (phone or name)',
+    'Mensagem': 'Message', 'Cole aqui o SMS do cliente…': 'Paste the customer\'s text here…', 'Adicionar aos pedidos': 'Add to requests', '✓ Pedido adicionado': '✓ Request added',
+    'Cole a mensagem': 'Paste the message', 'Coloque de quem é (telefone ou nome)': 'Enter who it\'s from (phone or name)', 'Ex.: (508) 555-1234': 'E.g.: (508) 555-1234',
+    'Nenhum pedido ainda. Cole um SMS acima, ou ligue o iPhone da empresa (aí chega sozinho).': 'No requests yet. Paste a text above, or connect the company iPhone (then they come in by themselves).',
     // confirm (linhas)
     '⚠️ Está SEM assinatura do cliente.': '⚠️ There\'s NO customer signature.', 'Depois de enviada ela fica trancada.': 'Once it\'s sent, it gets locked.'
   };
