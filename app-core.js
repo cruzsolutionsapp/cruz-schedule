@@ -53,13 +53,23 @@ function merge3(base,mine,srv){
     const o=clone(sR[m.id]);new Set([...Object.keys(m),...Object.keys(b)]).forEach(k=>{if(stable(m[k])!==stable(b[k])){if(m[k]===undefined)delete o[k];else o[k]=clone(m[k])}});
     out.push(o)});
   sRaw.forEach(j=>{if(j&&j.id&&!mIds.has(j.id)&&!bM[j.id])out.push(j)});   // obra nova criada em outro aparelho
+  // ordem das obras: só vale a MINHA ordem se eu mudei a ordem (↑↓). Senão fica a ordem do servidor
+  // (sem isso, um aparelho/aba com versão velha desfazia o "subir obra" feito em outro)
+  const comm=a=>a.filter(id=>bM[id]&&sM[id]);
+  if(base&&stable(comm(mJ.map(j=>j.id)))===stable(comm(bJ.map(j=>j.id)))){
+    const pos={};sRaw.forEach((j,i)=>{if(j&&j.id)pos[j.id]=i});const mine2=mJ.map(j=>j.id);
+    out.sort((a,b)=>{const pa=pos[a.id],pb=pos[b.id];if(pa!=null&&pb!=null)return pa-pb;if(pa!=null)return -1;if(pb!=null)return 1;return mine2.indexOf(a.id)-mine2.indexOf(b.id)})}
   const sent=Object.assign({},srv.sent||{}),bS=(base&&base.sent)||{},mS=mine.sent||{};
   new Set([...Object.keys(bS),...Object.keys(mS)]).forEach(k=>{if(stable(mS[k])!==stable(bS[k])){if(mS[k]===undefined)delete sent[k];else sent[k]=mS[k]}});
   let drivers=srv.drivers||{};
   if(stable(out)!==stable(sRaw)){drivers={};out.forEach(j=>{const n=jobDrivers({crew:j.crew||[]});if(n.length)drivers[j.id]=n})}
   return {date:mine.date||srv.date,jobs:out,sent,drivers};
 }
-function keepPend(path,data){try{localStorage.setItem('pend:'+path,JSON.stringify({data,base:BASE[path]||null,at:Date.now()}))}catch(e){}}
+const TAB=Math.random().toString(36).slice(2,10);   // esta aba/janela (o localStorage é dividido entre abas do mesmo navegador)
+function keepPend(path,data){try{localStorage.setItem('pend:'+path,JSON.stringify({data,base:BASE[path]||null,at:Date.now(),tab:TAB}))}catch(e){}}
+// mudança guardada que ficou pra trás (app fechou antes de enviar). Se é de OUTRA aba ainda viva (recente), não mexe:
+// antes, a aba da TV / outra janela reenviava a mudança velha da outra aba e desfazia o que a pessoa acabou de fazer
+const orphanPend=o=>!!(o&&o.data&&o.tab!==TAB&&Date.now()-o.at>120000&&Date.now()-o.at<2*86400000);
 function dropPend(path){try{localStorage.removeItem('pend:'+path)}catch(e){}}
 const dayTx={};   // gravações da escala ainda em andamento, por dia: enquanto tiver, ignora o que o servidor manda (é versão velha)
 function flushDay(path,data){
@@ -79,7 +89,7 @@ function flushDay(path,data){
     if(!navigator.onLine||/unavailable|failed-precondition|aborted|deadline-exceeded|internal|resource-exhausted|cancelled/.test(c)){setStatus(navigator.onLine?'saving':'offline');retry(navigator.onLine?3000:8000)}
     else{dayTx[path]=Math.max(0,(dayTx[path]||1)-1);setStatus('err');toast('Não consegui salvar: '+(c||'erro'))}});
 }
-window.addEventListener('online',()=>Object.keys(localStorage).filter(k=>k.startsWith('pend:days/')).forEach(k=>{const path=k.slice(5);if(pend[path])return;try{const o=JSON.parse(localStorage.getItem(k));if(o&&o.data&&path===dayPath(cur)){pend[path]=o.data;flush(path)}}catch(e){}}));
+window.addEventListener('online',()=>Object.keys(localStorage).filter(k=>k.startsWith('pend:days/')).forEach(k=>{const path=k.slice(5);if(pend[path])return;try{const o=JSON.parse(localStorage.getItem(k));if(o&&o.data&&o.tab===TAB&&path===dayPath(cur)){pend[path]=o.data;flush(path)}}catch(e){}}));
 function flush(path){
   if(!pend[path])return;
   const data=pend[path];delete pend[path];
@@ -138,7 +148,8 @@ function remoteRoster(snap){
 let lastDrivers=null,dayFromServer=false,rosterFromServer=false;
 // mudança feita sem internet (ou app fechado antes de enviar): quando chega a versão do servidor, junta e envia
 function resumePend(path,snap){if(snap.metadata&&snap.metadata.fromCache)return;let o=null;try{o=JSON.parse(localStorage.getItem('pend:'+path)||'null')}catch(e){}
-  if(!o||!o.data||Date.now()-o.at>2*86400000){dropPend(path);return}
+  if(!o||!o.data||Date.now()-o.at>2*86400000){if(o&&o.tab!==TAB)dropPend(path);return}
+  if(!orphanPend(o))return;
   const base=o.base;inflight++;setStatus('saving');
   db.doc(path).tx(srv=>{const m=merge3(base,o.data,srv);lastSent[path]=stable(m);return m}).then(m=>{inflight--;dropPend(path);BASE[path]=clone(m);setStatus('ok');if(path===dayPath(cur)&&!pend[path]){D=normDay(m);rerender()}toast('✓ Mudanças feitas sem internet foram enviadas')},e=>{inflight--;console.error(e)})}
 function remotePhones(snap){
