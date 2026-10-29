@@ -604,7 +604,7 @@ async function addJobTo(ds,nj){const path=dayPath(ds);
   const go=srv=>{const jobs=Array.isArray(srv&&srv.jobs)?srv.jobs.slice():[];if(jobs.some(x=>x.id===nj.id))return null;jobs.push(nj);
     const drivers={};jobs.forEach(x=>{const n=jobDrivers({crew:x.crew||[]});if(n.length)drivers[x.id]=n});
     const r={date:ds,jobs,sent:(srv&&srv.sent)||{},drivers};if(sendV)r.v=WV;return r};
-  if(db.doc(path).tx)return db.doc(path).tx(go);
+  if(db.doc(path).tx){let before=null;const r=await db.doc(path).tx(srv=>{before=srv;return go(srv)});if(r)dayLog(before,r,'agendamento/cópia de outro dia · ');return r}
   const sn=await db.doc(path).get();const nd=go(sn.exists?sn.data():null);if(nd)await db.doc(path).set(nd)}
 // src = id da obra original (a cópia guarda de onde veio), pra saber se é a MESMA turma ou outra turma no mesmo endereço
 const srcOf=x=>x.src||x.id;
