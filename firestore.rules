@@ -43,7 +43,9 @@ service cloud.firestore {
     }
     // Escala do dia: só os campos certos, data batendo com o documento e no máximo 150 obras
     function dayOk(day) {
-      return request.resource.data.keys().hasOnly(['date', 'jobs', 'sent', 'drivers'])
+      return request.resource.data.keys().hasOnly(['date', 'jobs', 'sent', 'drivers', 'v'])
+        // só o app atualizado grava a escala (versão velha num celular/TV desfazia o que os outros faziam)
+        && request.resource.data.get('v', 0) >= 115
         && request.resource.data.date == day
         && request.resource.data.jobs is list && request.resource.data.jobs.size() <= 150;
     }
@@ -245,8 +247,17 @@ service cloud.firestore {
       allow read: if isMember();
       allow create: if can('escala') && dayOk(day);
       allow update: if dayOk(day) && (can('escala') && (can('apagar') || request.resource.data.jobs.size() >= resource.data.jobs.size()))
-        || (can('telefones') && onlyChanged(['sent']));
+        || (dayOk(day) && can('telefones') && onlyChanged(['sent', 'v']));
       allow delete: if can('apagar');
+    }
+    // Registro de cada gravação da escala (qual aparelho, versão do app e o que mudou) — pra achar quem desfaz as mudanças
+    match /daylog/{id} {
+      allow create: if (can('escala') || can('telefones'))
+        && request.resource.data.keys().hasOnly(['date', 'at', 'by', 'dev', 'ver', 'sum'])
+        && request.resource.data.by == me() && request.resource.data.sum is string && request.resource.data.sum.size() <= 2000;
+      allow read: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
   }
 }

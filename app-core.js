@@ -27,6 +27,8 @@ let unsubDay=null;
 /* ---------- salvamento ---------- */
 const pend={}, timers={}, busy={}, lastSent={};
 const dayPath=d=>'days/'+d, ROSTER='config/roster';
+let sendV=true;   // enquanto as regras novas não forem publicadas, o banco recusa o campo v: aí manda sem
+const WV=115;   // versão de gravação da escala: as regras do banco só aceitam a partir dela (aparelho com app velho não grava)
 function setStatus(k){if(k==='ok'&&!navigator.onLine)k='offline';const el=$('sync');el.className='sync '+k;
   el.textContent={ok:'Sincronizado',saving:'Salvando…',err:'Erro ao salvar',loading:'Conectando…',offline:'Sem internet · salvo no aparelho'}[k]}
 const stable=o=>JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v);
@@ -41,7 +43,7 @@ function flushAll(){Object.keys(pend).forEach(p=>{clearTimeout(timers[p]);flush(
 const BASE={};
 const nJobs=d=>(Array.isArray(d&&d.jobs)?normDay(d).jobs:[]).map(({calc,...r})=>r);
 function merge3(base,mine,srv){
-  if(!srv)return mine;
+  if(!srv)return Object.assign({},mine,typeof sendV==='undefined'||sendV?{v:WV}:{});
   const bJ=nJobs(base),mJ=mine.jobs||[],sRaw=Array.isArray(srv.jobs)?srv.jobs:[],sJ=nJobs(srv);
   const bM={},sM={},sR={};bJ.forEach(j=>bM[j.id]=j);sJ.forEach(j=>sM[j.id]=j);sRaw.forEach(j=>{if(j&&j.id)sR[j.id]=j});
   const mIds=new Set(mJ.map(j=>j.id)),out=[];
@@ -63,9 +65,20 @@ function merge3(base,mine,srv){
   new Set([...Object.keys(bS),...Object.keys(mS)]).forEach(k=>{if(stable(mS[k])!==stable(bS[k])){if(mS[k]===undefined)delete sent[k];else sent[k]=mS[k]}});
   let drivers=srv.drivers||{};
   if(stable(out)!==stable(sRaw)){drivers={};out.forEach(j=>{const n=jobDrivers({crew:j.crew||[]});if(n.length)drivers[j.id]=n})}
-  return {date:mine.date||srv.date,jobs:out,sent,drivers};
+  const r={date:mine.date||srv.date,jobs:out,sent,drivers};if(typeof sendV==='undefined'||sendV)r.v=WV;return r;
 }
-const TAB=Math.random().toString(36).slice(2,10);   // esta aba/janela (o localStorage é dividido entre abas do mesmo navegador)
+const TAB=Math.random().toString(36).slice(2,10);
+const DEV=(()=>{const u=navigator.userAgent;return (/iPhone/.test(u)?'iPhone':/iPad/.test(u)?'iPad':/Android/.test(u)?'Android':/Macintosh/.test(u)?'Mac':/Windows/.test(u)?'PC':'outro')+(/CriOS|Chrome/.test(u)?' Chrome':/Safari/.test(u)?' Safari':'')+(matchMedia&&matchMedia('(display-mode: standalone)').matches?' app':'')})();
+// registra o que esta gravação mudou (pra achar aparelho que desfaz o que os outros fazem)
+function dayLog(srv,m,pre){try{if(!m||!(P.escala||P.telefones))return;const a=(srv&&srv.jobs)||[],b=m.jobs||[],A={},B={};a.forEach(j=>A[j.id]=j);b.forEach(j=>B[j.id]=j);const nm=j=>tidy(j.company)||'obra';const out=[];
+  b.forEach(j=>{if(!A[j.id])out.push('+ '+nm(j))});a.forEach(j=>{if(!B[j.id])out.push('− apagou '+nm(j))});
+  const ord=x=>x.filter(j=>A[j.id]&&B[j.id]).map(j=>j.id).join();if(ord(a)!==ord(b))out.push('↕ ordem');
+  b.forEach(j=>{const o=A[j.id];if(!o)return;const ks=[...new Set([...Object.keys(o),...Object.keys(j)])].filter(k=>stable(o[k])!==stable(j[k]));if(!ks.length)return;
+    if(ks.includes('crew')){const on=(o.crew||[]).map(c=>c.name),nn=(j.crew||[]).map(c=>c.name);const ad=nn.filter(x=>!on.includes(x)),rm=on.filter(x=>!nn.includes(x));out.push(nm(j)+': '+(ad.length?'+'+ad.join(', +'):'')+(rm.length?' −'+rm.join(', −'):'')+(!ad.length&&!rm.length?'equipe':''))}
+    const rest=ks.filter(k=>k!=='crew');if(rest.length)out.push(nm(j)+' ('+rest.join(',')+')')});
+  if(stable((srv&&srv.sent)||{})!==stable(m.sent||{}))out.push('avisados');
+  if(!out.length)return;
+  db.doc('daylog/'+m.date+'_'+Date.now()+'_'+TAB).set({date:m.date,at:Date.now(),by:(ctx&&ctx.email)||'',dev:DEV+(document.body.classList.contains('central-open')||!$('central').hidden?' · TV':'')+' · '+TAB.slice(0,4),ver:WV,sum:(pre+out.join(' · ')).slice(0,1990)}).catch(()=>{})}catch(e){}}   // esta aba/janela (o localStorage é dividido entre abas do mesmo navegador)
 function keepPend(path,data){try{localStorage.setItem('pend:'+path,JSON.stringify({data,base:BASE[path]||null,at:Date.now(),tab:TAB}))}catch(e){}}
 // mudança guardada que ficou pra trás (app fechou antes de enviar). Se é de OUTRA aba ainda viva (recente), não mexe:
 // antes, a aba da TV / outra janela reenviava a mudança velha da outra aba e desfazia o que a pessoa acabou de fazer
@@ -80,12 +93,14 @@ function flushDay(path,data){
   const retry=ms=>setTimeout(()=>{dayTx[path]=Math.max(0,(dayTx[path]||1)-1);if(!pend[path]){pend[path]=data;flush(path)}else flush(path)},ms);
   if(!navigator.onLine){setStatus('offline');retry(8000);return}
   inflight++;const base=BASE[path]||null;
-  db.doc(path).tx(srv=>{const m=merge3(base,data,srv);lastSent[path]=stable(m);return m}).then(m=>{
-    inflight--;dayTx[path]=Math.max(0,(dayTx[path]||1)-1);BASE[path]=clone(m);dropPend(path);saveHist(m);
+  let before=null;
+  db.doc(path).tx(srv=>{before=srv;const m=merge3(base,data,srv);lastSent[path]=stable(m);return m}).then(m=>{
+    inflight--;dayTx[path]=Math.max(0,(dayTx[path]||1)-1);BASE[path]=clone(m);dropPend(path);saveHist(m);dayLog(before,m,'');
     if(!inflight&&!Object.keys(pend).length&&!dayTx[path])setStatus('ok');
     if(path===dayPath(cur)&&!pend[path]&&!dayTx[path]&&stable(m)!==stable(data)&&stable({date:cur,jobs:D.jobs.map(({calc,...r})=>r),sent:D.sent||{}})===stable({date:data.date,jobs:data.jobs,sent:data.sent})){
       D=normDay(m);if(typing())deferred=true;else{renderJobs();renderCentral()}}   // juntou com mudança de outro aparelho
   },e=>{inflight--;console.error(e);const c=(e&&e.code)||'';
+    if(c==='permission-denied'&&!data.__pv){data.__pv=1;sendV=!sendV;retry(300);return}   // regras antigas/novas no Firebase: tenta uma vez com/sem o campo v
     if(!navigator.onLine||/unavailable|failed-precondition|aborted|deadline-exceeded|internal|resource-exhausted|cancelled/.test(c)){setStatus(navigator.onLine?'saving':'offline');retry(navigator.onLine?3000:8000)}
     else{dayTx[path]=Math.max(0,(dayTx[path]||1)-1);setStatus('err');toast('Não consegui salvar: '+(c||'erro'))}});
 }
@@ -151,7 +166,8 @@ function resumePend(path,snap){if(snap.metadata&&snap.metadata.fromCache)return;
   if(!o||!o.data||Date.now()-o.at>2*86400000){if(o&&o.tab!==TAB)dropPend(path);return}
   if(!orphanPend(o))return;
   const base=o.base;inflight++;setStatus('saving');
-  db.doc(path).tx(srv=>{const m=merge3(base,o.data,srv);lastSent[path]=stable(m);return m}).then(m=>{inflight--;dropPend(path);BASE[path]=clone(m);setStatus('ok');if(path===dayPath(cur)&&!pend[path]){D=normDay(m);rerender()}toast('✓ Mudanças feitas sem internet foram enviadas')},e=>{inflight--;console.error(e)})}
+  let before=null;
+  db.doc(path).tx(srv=>{before=srv;const m=merge3(base,o.data,srv);lastSent[path]=stable(m);return m}).then(m=>{inflight--;dropPend(path);dayLog(before,m,'reenvio de mudança guardada · ');BASE[path]=clone(m);setStatus('ok');if(path===dayPath(cur)&&!pend[path]){D=normDay(m);rerender()}toast('✓ Mudanças feitas sem internet foram enviadas')},e=>{inflight--;console.error(e)})}
 function remotePhones(snap){
   if(pend[PHONES])return;
   if(phonesLoaded&&snap.metadata&&snap.metadata.hasPendingWrites)return;
@@ -587,7 +603,7 @@ async function addJobTo(ds,nj){const path=dayPath(ds);
   if(ds===cur&&dayLoaded){D.jobs.push(nj);saveDay();renderJobs();return}
   const go=srv=>{const jobs=Array.isArray(srv&&srv.jobs)?srv.jobs.slice():[];if(jobs.some(x=>x.id===nj.id))return null;jobs.push(nj);
     const drivers={};jobs.forEach(x=>{const n=jobDrivers({crew:x.crew||[]});if(n.length)drivers[x.id]=n});
-    return {date:ds,jobs,sent:(srv&&srv.sent)||{},drivers}};
+    const r={date:ds,jobs,sent:(srv&&srv.sent)||{},drivers};if(sendV)r.v=WV;return r};
   if(db.doc(path).tx)return db.doc(path).tx(go);
   const sn=await db.doc(path).get();const nd=go(sn.exists?sn.data():null);if(nd)await db.doc(path).set(nd)}
 // src = id da obra original (a cópia guarda de onde veio), pra saber se é a MESMA turma ou outra turma no mesmo endereço
@@ -694,7 +710,10 @@ async function openHist(){$('histDlg').hidden=false;document.body.classList.add(
     $('histList').innerHTML=rows.length?rows.map((h,i)=>`<div class="histrow"><div><b>${esc(new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase())}</b>${i===0?' <span class="wkbadge">mais recente</span>':''}
       <small>${h.n} obra${h.n===1?'':'s'} · ${h.people} pessoa${h.people===1?'':'s'} · ${h.left} despachada${h.left===1?'':'s'} · por ${esc((h.by||'').split('@')[0]||'?')}</small></div>
       ${i===0?'':`<button class="btn" data-hist="${esc(h.id)}">Voltar pra esta</button>`}</div>`).join(''):'<p class="empty">Ainda não tem versões guardadas deste dia. (O histórico começa a guardar a partir de agora.)</p>';
-    HIST=rows}catch(e){console.error(e);$('histList').innerHTML='<p class="empty">Não consegui abrir o histórico ('+esc(e.code||'erro')+'). Atualize as regras do Firebase.</p>'}}
+    HIST=rows;
+    if(isAdmin){try{const lq=await db.collection('daylog').where('date','==',cur).get();const L=lq.docs.map(d=>d.data()).sort((a,b)=>b.at-a.at).slice(0,60);
+      $('histList').insertAdjacentHTML('beforeend',`<details class="dlog"><summary>🔎 Quem mexeu neste dia (${L.length} gravações, mais nova primeiro)</summary>${L.length?L.map(x=>`<div class="dlrow"><b>${esc(new Date(x.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit'}).toLowerCase())}</b> <span>${esc((x.by||'').split('@')[0])}</span> <small>${esc(x.dev||'')} · v${esc(String(x.ver||''))}</small><div>${esc(x.sum||'')}</div></div>`).join(''):'<p class="hint">Nada registrado ainda (começa a registrar a partir de agora).</p>'}</details>`)}catch(e){console.error(e)}}
+    }catch(e){console.error(e);$('histList').innerHTML='<p class="empty">Não consegui abrir o histórico ('+esc(e.code||'erro')+'). Atualize as regras do Firebase.</p>'}}
 let HIST=[];
 /* ---------- Recriar a escala a partir da mensagem do WhatsApp (a mesma que o app gera) ---------- */
 function to24(t){const m=String(t||'').trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);if(!m)return '';let h=+m[1];const mi=+(m[2]||0);
@@ -942,7 +961,7 @@ $('importInfo').addEventListener('click',async e=>{
   e.target.disabled=true;e.target.textContent='Importando…';
   try{S=normRoster(pendingImport.roster);lastSent[ROSTER]=stable(S);await db.doc(ROSTER).set(clone(S));
     if(P.telefones&&pendingImport.roster.phones){PH={...pendingImport.roster.phones};lastSent[PHONES]=stable({phones:PH});await db.doc(PHONES).set({phones:PH})}
-    for(const d of pendingImport.days){if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d.date))await db.doc(dayPath(d.date)).set({date:d.date,jobs:d.jobs||[],sent:d.sent||{},drivers:d.drivers||{}})}
+    for(const d of pendingImport.days){if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d.date))await db.doc(dayPath(d.date)).set({date:d.date,jobs:d.jobs||[],sent:d.sent||{},drivers:d.drivers||{},v:WV})}
     for(const a of (pendingImport.attendance||[])){if(a&&a._id&&a.date&&a.jobId){const {_id,...r}=a;await db.doc('attendance/'+_id).set(r)}}
     for(const o of (pendingImport.dayoff||[])){if(o&&/^\d{4}-\d{2}-\d{2}$/.test(o.date)&&o.people)await db.doc('dayoff/'+o.date).set({date:o.date,people:o.people})}
     toast('Importação concluída');pendingImport=null;$('importInfo').hidden=true;renderRoster();watchDay();
