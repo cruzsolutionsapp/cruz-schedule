@@ -2233,6 +2233,12 @@ document.addEventListener('click',e=>{const c=e.target.closest('[data-copy]');if
   if(e.target.id==='inbNewKey'&&confirm('Gerar uma chave nova? A antiga para de funcionar e você precisa trocar no Atalho do iPhone.'))inbSetupShow(true)});
 
 watchInbox();
+
+/* aviso: o app aberto em mais de uma aba/janela do mesmo navegador (cada aba grava por conta própria) */
+try{if(window.BroadcastChannel&&!/^#demo/.test(location.hash)){const bc=new BroadcastChannel('cruz-tabs');const others=new Set();
+  const warn=()=>{if(others.size&&$('central').hidden)toast('⚠️ O app está aberto em '+(others.size+1)+' abas/janelas neste computador. Feche as outras pra não desfazer mudanças.',8000)};
+  bc.onmessage=e=>{const m=e.data||{};if(m.t==='hi'){others.add(m.id);bc.postMessage({t:'here',id:TAB});warn()}else if(m.t==='here'){if(!others.has(m.id)){others.add(m.id);warn()}}else if(m.t==='bye')others.delete(m.id)};
+  bc.postMessage({t:'hi',id:TAB});addEventListener('pagehide',()=>bc.postMessage({t:'bye',id:TAB}))}}catch(e){}
 if(viewer)tab('day');
 $('date').value=cur;showWeekday();
 S=normRoster(null);
